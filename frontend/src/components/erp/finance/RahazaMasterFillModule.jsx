@@ -36,12 +36,14 @@ export default function RahazaMasterFillModule({ token }) {
       const j = await r.json();
       if (!r.ok) { toast.error(typeof j.detail === 'string' ? j.detail : j.detail?.message || 'Gagal'); return; }
       setResult(j); setFile(null); setPreview(null); if (inputRef.current) inputRef.current.value = '';
-      toast.success(`Diterapkan: ${j.materials_updated} material · ${j.accounts_updated} rekening · ${j.stores_updated} toko · HPP ${j.models_hpp_applied} model`);
+      toast.success(`Diterapkan: ${j.materials_updated} material · BOM ${(j.bom_lines_appended || 0) + (j.bom_lines_updated || 0)} baris/${j.boms_touched || 0} BOM · ${j.sku_prices_updated || 0} harga SKU · HPP ${j.models_hpp_applied} model`);
     } finally { setBusy(false); }
   };
   const dl = () => downloadXlsx('/api/rahaza/master/fill-template', token, 'TEMPLATE_HARGA_SATUAN_REKENING_BOM.xlsx').catch((e) => toast.error(e.message));
   const dlGap = () => downloadXlsx('/api/rahaza/master/gap-workbook', token, 'DATA_YANG_PERLU_DIISI_DA.xlsx').catch((e) => toast.error(e.message));
   const t = preview?.totals || {};
+  const nApply = (t.materials || 0) + (t.accounts || 0) + (t.stores || 0) + (t.bom_lines || 0) + (t.models || 0) + (t.sku_prices || 0) + (t.stock_rows || 0) + (t.salaries || 0);
+  const bomWarn = preview?.warnings || [];
 
   return (
     <div className="space-y-5" data-testid="fill-page">
@@ -57,7 +59,7 @@ export default function RahazaMasterFillModule({ token }) {
           <input ref={inputRef} type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/20 file:px-3 file:py-1.5 file:text-xs file:text-primary" data-testid="fill-file" />
           <p className="text-xs text-muted-foreground">Pratinjau muncul otomatis; baris kosong tidak diubah.</p></GlassCard>
         <GlassCard className="p-5 space-y-3"><div className="text-[10px] uppercase text-muted-foreground font-semibold">Langkah 3</div><h3 className="font-semibold text-sm">Terapkan</h3>
-          <Button onClick={doApply} disabled={!preview?.ok || busy || !(t.materials + t.accounts + t.stores + (t.bom_lines || 0) + (t.models || 0))} className="h-9 w-full" data-testid="fill-apply">
+          <Button onClick={doApply} disabled={!preview?.ok || busy || !nApply} className="h-9 w-full" data-testid="fill-apply">
             {preview?.ok ? <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}Terapkan & Hitung HPP</Button></GlassCard>
       </div>
       {preview && (
@@ -66,11 +68,13 @@ export default function RahazaMasterFillModule({ token }) {
             <StatTile label="Material berubah" value={t.materials} testId="fill-kpi-mat" />
             <StatTile label="Rekening" value={t.accounts} testId="fill-kpi-acc" />
             <StatTile label="Toko" value={t.stores} testId="fill-kpi-store" />
-            <StatTile label="Baris BOM" value={`${t.bom_lines || 0} (${t.bom_models || 0} model)`} testId="fill-kpi-bom" />
+            <StatTile label="Baris BOM" value={`${t.bom_lines || 0} (${t.bom_groups || 0} kelompok · ${t.bom_models || 0} model)`} testId="fill-kpi-bom" />
             <StatTile label="Berat model" value={t.models || 0} testId="fill-kpi-model" />
-            <StatTile label={preview.ok ? 'Siap' : `${preview.errors.length} masalah`} value={preview.ok ? '✓' : '✗'} accent={preview.ok ? 'success' : 'danger'} testId="fill-kpi-status" />
+            <StatTile label="Harga SKU · Stok awal · Gaji" value={`${t.sku_prices || 0} · ${t.stock_rows || 0} · ${t.salaries || 0}`} testId="fill-kpi-extra" />
+            <StatTile label={preview.ok ? (bomWarn.length ? `Siap · ${bomWarn.length} dilewati` : 'Siap') : `${preview.errors.length} masalah`} value={preview.ok ? '✓' : '✗'} accent={preview.ok ? (bomWarn.length ? 'warning' : 'success') : 'danger'} testId="fill-kpi-status" />
           </div>
           {preview.errors.length > 0 && <GlassCard className="p-4 border border-rose-500/30 text-xs" data-testid="fill-errors"><div className="inline-flex items-center gap-2 text-rose-300 font-semibold mb-2"><AlertTriangle className="w-4 h-4" />Perbaiki dulu</div><ul className="list-disc pl-5 space-y-1">{preview.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></GlassCard>}
+          {bomWarn.length > 0 && <GlassCard className="p-4 border border-amber-500/30 text-xs" data-testid="fill-warnings"><div className="inline-flex items-center gap-2 text-amber-500 font-semibold mb-2"><AlertTriangle className="w-4 h-4" />{bomWarn.length} baris dilewati — tidak menghalangi penerapan sisanya</div><ul className="list-disc pl-5 space-y-1 max-h-[30vh] overflow-auto">{bomWarn.map((e, i) => <li key={i}>{e}</li>)}</ul></GlassCard>}
           {preview.materials.length > 0 && (
             <GlassCard className="p-0 overflow-hidden"><div className="overflow-auto max-h-[40vh]"><table className="w-full text-sm" data-testid="fill-mat-table">
               <thead className="sticky top-0 bg-[var(--card-surface)] text-[10px] uppercase text-muted-foreground"><tr className="border-b border-[var(--glass-border)]"><th className="py-2 px-2 text-left">Kode</th><th className="py-2 px-2 text-left">Nama</th><th className="py-2 px-2 text-left">Beli</th><th className="py-2 px-2 text-right">Isi</th><th className="py-2 px-2 text-right">Harga beli</th><th className="py-2 px-2 text-right">→ per {'{dasar}'}</th><th className="py-2 px-2 text-right">Sebelumnya</th></tr></thead>
@@ -79,8 +83,8 @@ export default function RahazaMasterFillModule({ token }) {
           )}
           {(preview.bom_lines || []).length > 0 && (
             <GlassCard className="p-0 overflow-hidden" data-testid="fill-bom-table"><div className="overflow-auto max-h-[40vh]"><table className="w-full text-sm">
-              <thead className="sticky top-0 bg-[var(--card-surface)] text-[10px] uppercase text-muted-foreground"><tr className="border-b border-[var(--glass-border)]"><th className="py-2 px-2 text-left">Model</th><th className="py-2 px-2 text-left">Material</th><th className="py-2 px-2 text-right">Qty/pcs</th><th className="py-2 px-2 text-left">Satuan</th></tr></thead>
-              <tbody>{preview.bom_lines.map((b, i) => <tr key={i} className="border-b border-[var(--glass-border)]"><td className="py-1.5 px-2 font-mono text-xs">{b.model_code}</td><td className="py-1.5 px-2 text-xs"><span className="font-mono">{b.code}</span> {b.name}</td><td className={tdN}>{b.qty}</td><td className="py-1.5 px-2 text-xs">{b.unit}</td></tr>)}</tbody>
+              <thead className="sticky top-0 bg-[var(--card-surface)] text-[10px] uppercase text-muted-foreground"><tr className="border-b border-[var(--glass-border)]"><th className="py-2 px-2 text-left">Baris</th><th className="py-2 px-2 text-left">Model</th><th className="py-2 px-2 text-left">Varian tujuan</th><th className="py-2 px-2 text-left">Material</th><th className="py-2 px-2 text-right">Qty/pcs</th><th className="py-2 px-2 text-right">= satuan dasar</th><th className="py-2 px-2 text-left">Catatan</th></tr></thead>
+              <tbody>{preview.bom_lines.map((b, i) => <tr key={i} className="border-b border-[var(--glass-border)]" data-testid={`fill-bom-row-${b.row}`}><td className="py-1.5 px-2 font-mono text-xs text-muted-foreground">{b.row}</td><td className="py-1.5 px-2 text-xs"><span className="font-mono">{b.model_code}</span> {b.model_name}</td><td className="py-1.5 px-2 text-xs">{b.target} <span className="text-muted-foreground">({b.target_skus} SKU)</span></td><td className="py-1.5 px-2 text-xs"><span className="font-mono">{b.code}</span> {b.name}</td><td className={tdN}>{b.qty} {b.unit}</td><td className={tdN}>{b.qty_base} {b.unit_base}</td><td className="py-1.5 px-2 text-[11px] text-muted-foreground">{b.note}</td></tr>)}</tbody>
             </table></div></GlassCard>
           )}
           {(preview.models || []).length > 0 && (
@@ -94,7 +98,7 @@ export default function RahazaMasterFillModule({ token }) {
           )}
         </div>
       )}
-      {result && <GlassCard className="p-4 text-xs text-emerald-300" data-testid="fill-result">Selesai: {result.materials_updated} material · {result.accounts_updated} rekening · {result.stores_updated} toko · BOM: {result.bom_lines_appended || 0} baris ke {result.boms_touched || 0} BOM, {result.bom_base_created || 0} BOM dasar baru · {result.models_weight_updated || 0} berat model · {result.panels_standard_costed} potongan dinilai standar · HPP {result.models_hpp_applied} model diterapkan{result.units_added?.length ? ` · satuan baru: ${result.units_added.join(', ')}` : ''}</GlassCard>}
+      {result && <GlassCard className="p-4 text-xs text-emerald-300" data-testid="fill-result">Selesai: {result.materials_updated} material · {result.accounts_updated} rekening · {result.stores_updated} toko · BOM: {result.bom_lines_appended || 0} baris baru + {result.bom_lines_updated || 0} qty diubah di {result.boms_touched || 0} BOM ({result.bom_groups || 0} kelompok), {result.bom_base_created || 0} BOM dasar baru · {result.sku_prices_updated || 0} harga SKU · {result.opening_stock_rows || 0} stok awal · {result.salaries_updated || 0} gaji · {result.models_weight_updated || 0} berat model · {result.panels_standard_costed} potongan dinilai standar · HPP {result.models_hpp_applied} model diterapkan{result.units_added?.length ? ` · satuan baru: ${result.units_added.join(', ')}` : ''}</GlassCard>}
     </div>
   );
 }

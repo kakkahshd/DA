@@ -32,6 +32,9 @@ PETUNJUK = [
     "UNGGAH ke Portal Keuangan → Master Akuntansi → Impor Harga · Rekening · BOM (berkas ini langsung):",
     "  MATERIAL          — material yang harganya masih 0: isi satuan_beli, isi_per_satuan_beli, harga_per_satuan_beli.",
     "  BOM_AKSESORIS     — aksesoris/bahan pendukung per model (benang, label, kancing…). Satu baris per bahan; kode_material lihat sheet REF_AKSESORIS.",
+    "                      Baris ber-kode_model = awal kelompok; baris di bawahnya yang kode_model-nya KOSONG = bahan lain untuk kelompok yang sama.",
+    "                      qty_per_pcs boleh ditulis dengan satuan (\"60 cm\", \"1 pcs\"). Kolom 'varian' (opsional) = warna/ukuran pemakai bahan ini,",
+    "                      dipisah koma — lihat kolom 'varian_tersedia'. Kosong = semua varian model. Kode model sama dengan nama sama = model beda ukuran.",
     "  MODEL             — berat_gram per model (untuk ongkir).",
     "  HARGA_JUAL_SKU    — SKU barang jadi yang belum berharga; harga_saran = harga SKU saudara di model yang sama (salin ke harga_jual bila setuju).",
     "  STOK_AWAL_FG      — stok fisik barang jadi per SKU per tanggal go-live (qty). Nilai rupiahnya diambil dari SALDO_AWAL (akun Persediaan), bukan dari sini.",
@@ -92,14 +95,17 @@ async def build_gap_workbook(db) -> tuple[bytes, dict]:
         has_bom.add(b["model_id"])
         if any((ln.get("material_type") or "").lower() not in ("fabric", "") and not ln.get("is_cut_panel") for ln in b.get("materials") or []):
             has_acc.add(b["model_id"])
+    from core.bom_fill import load_model_variants, _variants_label
+    vmap = await load_model_variants(db, [m["id"] for m in models])
     ws = wb.create_sheet("MODEL")
-    _head(ws, MODEL_COLS + ["hpp_sistem"])
+    _head(ws, MODEL_COLS + ["hpp_sistem", "varian_tersedia"])
     for m in models:
         ws.append([m["code"], m["name"], m.get("category_name"), float(m.get("weight_gram") or 0) or None,
                    "ya" if m["id"] in has_bom else "BELUM", "ya" if m["id"] in has_acc else "BELUM",
-                   "" if m["id"] in has_bom else "belum punya BOM — isi BOM_AKSESORIS + kain di RnD", float(m.get("hpp") or 0) or None])
+                   "" if m["id"] in has_bom else "belum punya BOM — isi BOM_AKSESORIS + kain di RnD", float(m.get("hpp") or 0) or None,
+                   _variants_label(vmap.get(m["id"]) or [])])
     _mark(ws, MODEL_COLS, ["berat_gram"])
-    _widths(ws, (14, 30, 16, 12, 12, 16, 44, 14))
+    _widths(ws, (14, 30, 16, 12, 12, 16, 44, 14, 60))
     stats["model_tanpa_berat"] = sum(1 for m in models if not m.get("weight_gram"))
     stats["model_tanpa_bom"] = sum(1 for m in models if m["id"] not in has_bom)
     stats["model_tanpa_aksesoris"] = sum(1 for m in models if m["id"] not in has_acc)
@@ -109,10 +115,11 @@ async def build_gap_workbook(db) -> tuple[bytes, dict]:
     for m in models:
         if m["id"] in has_acc:
             continue
+        label = _variants_label(vmap.get(m["id"]) or [])
         for _ in range(3):  # 3 baris kosong per model — tambah baris sendiri bila perlu
-            ws.append([m["code"], m["name"], "", "", None, "", "isi kode_material (lihat REF_AKSESORIS) & qty_per_pcs"])
-    _mark(ws, BOM_COLS, ["kode_material", "qty_per_pcs"])
-    _widths(ws, (14, 30, 16, 36, 12, 10, 48))
+            ws.append([m["code"], m["name"], "", "", None, "", "isi kode_material (lihat REF_AKSESORIS) & qty_per_pcs", "", label])
+    _mark(ws, BOM_COLS, ["kode_material", "qty_per_pcs", "varian"])
+    _widths(ws, (14, 30, 16, 36, 12, 10, 48, 24, 60))
     ws.freeze_panes = "C2"
     ws = wb.create_sheet("REF_AKSESORIS")
     _head(ws, ["kode_material", "nama", "tipe", "satuan_dasar", "harga_per_satuan_dasar"])
@@ -221,7 +228,7 @@ async def build_gap_workbook(db) -> tuple[bytes, dict]:
 
 # ── PARSE & APPLY sheet tambahan (dipanggil dari master_fill) ────────────────────────
 async def parse_extra_sheets(db, wb, errors: list) -> dict:
-    out = {"sku_prices": [], "stock_fg": [], "stock_mat": [], "salaries": []}
+    out = {"sku_prices": [], "stock_fg": [], "stock_mat": [], "salaries": [], "warnings": []}
     locs = {l["code"]: l for l in await db.rahaza_locations.find({}, {"_id": 0, "id": 1, "code": 1}).to_list(2000)}
     if "HARGA_JUAL_SKU" in wb.sheetnames:
         fg = {f["code"]: f for f in await db.rahaza_materials.find({"type": "fg"}, {"_id": 0, "id": 1, "code": 1, "retail_price_master": 1}).to_list(20000)}
@@ -229,10 +236,12 @@ async def parse_extra_sheets(db, wb, errors: list) -> dict:
             if not r or not r[0]:
                 continue
             sku = str(r[0]).strip()
+            raw = r[6] if len(r) > 6 else None
             try:
-                harga = _num(r[6]) if len(r) > 6 else 0
+                harga = _num(raw)
             except ValueError:
-                errors.append(f"HARGA_JUAL_SKU baris {i}: harga_jual bukan angka")
+                out["warnings"].append(f"HARGA_JUAL_SKU baris {i}: {sku} harga_jual berisi teks '{str(raw).strip()}' — tidak diubah "
+                                       "(SKU yang sudah tidak dijual dinonaktifkan lewat RnD → Master Produk → Varian)")
                 continue
             if harga <= 0:
                 continue

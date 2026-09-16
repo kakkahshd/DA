@@ -128,7 +128,7 @@ async def bom_add_lines_to_model(db, user: dict | None, model_id: str, lines: li
 MAT_COLS = ["kode", "nama", "tipe", "kategori", "satuan_dasar", "satuan_beli", "isi_per_satuan_beli", "harga_per_satuan_beli", "harga_per_satuan_dasar_sekarang", "min_stok", "keterangan"]
 REK_COLS = ["kode_akun", "nama_akun", "bank", "no_rekening", "atas_nama"]
 TOKO_COLS = ["kode_toko", "nama_toko", "platform", "rekening_pencairan_kode_akun"]
-BOM_COLS = ["kode_model", "nama_model", "kode_material", "nama_material", "qty_per_pcs", "satuan", "keterangan"]
+BOM_COLS = ["kode_model", "nama_model", "kode_material", "nama_material", "qty_per_pcs", "satuan", "keterangan", "varian", "varian_tersedia"]
 MODEL_COLS = ["kode_model", "nama_model", "kategori", "berat_gram", "punya_bom", "punya_aksesoris", "keterangan"]
 PETUNJUK = [
     "TEMPLATE HARGA · SATUAN · REKENING · BOM · MODEL — CV. Dewi Aditya",
@@ -138,9 +138,10 @@ PETUNJUK = [
     "   Baris yang harganya dibiarkan kosong/0 TIDAK diubah. Potongan (CUT-…) tidak perlu diisi — biaya standarnya dihitung dari kain.",
     "Sheet REKENING: lengkapi no_rekening & atas_nama tiap akun bank/dompet (rekening Kas & Bank sudah tertaut ke akun ini).",
     "Sheet TOKO: isi 'rekening_pencairan_kode_akun' dgn kode akun bank tempat dana Shopee/TikTok cair (lihat daftar di sheet REKENING).",
-    "Sheet BOM_AKSESORIS: satu baris = satu bahan/aksesoris untuk satu model (kode_model dari sheet MODEL, kode_material dari sheet MATERIAL),",
-    "   'qty_per_pcs' = kebutuhan per 1 pcs jadi dalam satuan dasar material. Baris ditambahkan ke SEMUA BOM varian model itu (yang sudah ada dilewati);",
-    "   model yang belum punya BOM dibuatkan BOM dasar lalu disalin ke tiap varian. Contoh baris sudah disiapkan per model — hapus yang tidak perlu.",
+    "Sheet BOM_AKSESORIS: satu baris = satu bahan/aksesoris. Baris ber-'kode_model' = awal kelompok; baris di bawahnya yang kode_model-nya",
+    "   KOSONG = bahan tambahan untuk kelompok yang sama. 'qty_per_pcs' boleh ditulis dengan satuan (\"60 cm\", \"1 pcs\") — dikonversi ke satuan dasar.",
+    "   Kolom 'varian' (opsional) = warna/ukuran yang memakai bahan kelompok ini, dipisah koma (lihat 'varian_tersedia'). Kosong = semua varian model.",
+    "   Model yang belum punya BOM dibuatkan BOM per varian tujuan. Bahan yang sudah ada di BOM: qty diperbarui bila berbeda.",
     "Sheet MODEL: isi 'berat_gram' (berat 1 pcs jadi, untuk ongkir). Kolom punya_bom/punya_aksesoris hanya informasi.",
     "Unggah di Portal Keuangan → Master Akuntansi → Impor Master (atau RnD → Master Produk → Harga & Satuan).",
 ]
@@ -188,17 +189,20 @@ async def build_fill_template(db) -> bytes:
             has_acc.add(b["model_id"])
     ws = wb.create_sheet("BOM_AKSESORIS")
     _head(ws, BOM_COLS)
+    from core.bom_fill import load_model_variants, _variants_label
+    vmap = await load_model_variants(db, [m["id"] for m in models])
     for m in models:
-        ws.append([m.get("code"), m.get("name"), "", "", None, "", "" if m["id"] in has_acc else "belum ada aksesoris — isi kode_material & qty"])
-    for col, w in zip("ABCDEFG", (14, 30, 16, 36, 12, 10, 40)):
+        ws.append([m.get("code"), m.get("name"), "", "", None, "", "" if m["id"] in has_acc else "belum ada aksesoris — isi kode_material & qty", "",
+                   _variants_label(vmap.get(m["id"]) or [])])
+    for col, w in zip("ABCDEFGHI", (14, 30, 16, 36, 12, 10, 40, 24, 60)):
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "C2"
     ws = wb.create_sheet("MODEL")
-    _head(ws, MODEL_COLS)
+    _head(ws, MODEL_COLS + ["varian_tersedia"])
     for m in models:
         ws.append([m.get("code"), m.get("name"), m.get("category_name"), float(m.get("weight_gram") or 0) or None,
-                   "ya" if m["id"] in has_bom else "BELUM", "ya" if m["id"] in has_acc else "BELUM", ""])
-    for col, w in zip("ABCDEFG", (14, 30, 16, 12, 12, 16, 40)):
+                   "ya" if m["id"] in has_bom else "BELUM", "ya" if m["id"] in has_acc else "BELUM", "", _variants_label(vmap.get(m["id"]) or [])])
+    for col, w in zip("ABCDEFGH", (14, 30, 16, 12, 12, 16, 40, 60)):
         ws.column_dimensions[col].width = w
     buf = io.BytesIO()
     wb.save(buf)
@@ -268,32 +272,11 @@ async def parse_fill_workbook(db, data: bytes) -> dict:
     bom_rows, model_rows = [], []
     if "BOM_AKSESORIS" in wb.sheetnames or "MODEL" in wb.sheetnames:
         models = {m["code"]: m for m in await db.rahaza_models.find({"active": {"$ne": False}}, {"_id": 0, "id": 1, "code": 1, "name": 1, "weight_gram": 1}).to_list(5000)}
+    bom = {"bom_groups": [], "bom_lines": [], "bom_warnings": []}
     if "BOM_AKSESORIS" in wb.sheetnames:
-        mat_master = {m["code"]: m for m in await db.rahaza_materials.find({"type": {"$ne": "fg"}, "active": {"$ne": False}}, {"_id": 0, "id": 1, "code": 1, "name": 1, "unit": 1, "type": 1}).to_list(20000)}
-        for i, r in enumerate(wb["BOM_AKSESORIS"].iter_rows(values_only=True, min_row=2), start=2):
-            if not r or not r[0]:
-                continue
-            mcode = str(r[0]).strip()
-            matcode = str(r[2]).strip().upper() if len(r) > 2 and r[2] else ""
-            if not matcode:
-                continue  # baris contoh yang tidak diisi
-            if mcode not in models:
-                errors.append(f"BOM_AKSESORIS baris {i}: model {mcode} tidak ada")
-                continue
-            mat = mat_master.get(matcode)
-            if not mat:
-                errors.append(f"BOM_AKSESORIS baris {i}: material {matcode} tidak ada di master (lihat sheet MATERIAL)")
-                continue
-            try:
-                qty = _num(r[4]) if len(r) > 4 else 0
-            except ValueError:
-                errors.append(f"BOM_AKSESORIS baris {i}: qty_per_pcs bukan angka")
-                continue
-            if qty <= 0:
-                errors.append(f"BOM_AKSESORIS baris {i}: qty_per_pcs {mcode}/{matcode} wajib > 0")
-                continue
-            bom_rows.append({"model_code": mcode, "model_id": models[mcode]["id"], "code": mat["code"], "material_id": mat["id"], "name": mat["name"],
-                             "qty": qty, "unit": (str(r[5]).strip() if len(r) > 5 and r[5] else mat.get("unit")), "material_type": mat.get("type")})
+        from core.bom_fill import parse_bom_sheet
+        bom = await parse_bom_sheet(db, wb["BOM_AKSESORIS"], models)
+        bom_rows = bom["bom_lines"]
     if "MODEL" in wb.sheetnames:
         for i, r in enumerate(wb["MODEL"].iter_rows(values_only=True, min_row=2), start=2):
             if not r or not r[0]:
@@ -311,10 +294,13 @@ async def parse_fill_workbook(db, data: bytes) -> dict:
                 model_rows.append({"model_code": mcode, "model_id": models[mcode]["id"], "weight_gram": berat})
     from core.gap_workbook import parse_extra_sheets
     extra = await parse_extra_sheets(db, wb, errors)
+    warnings = bom["bom_warnings"] + extra.pop("warnings")
     return {"ok": not errors, "errors": errors, "materials": mats, "accounts": accs, "stores": stores, "bom_lines": bom_rows, "models": model_rows,
+            "bom_groups": bom["bom_groups"], "warnings": warnings,
             **extra,
             "totals": {"materials": len(mats), "accounts": len(accs), "stores": len(stores), "bom_lines": len(bom_rows),
-                       "bom_models": len({b["model_id"] for b in bom_rows}), "models": len(model_rows),
+                       "bom_models": len({b["model_id"] for b in bom["bom_groups"]}), "bom_groups": len(bom["bom_groups"]),
+                       "skipped": len(warnings), "models": len(model_rows),
                        "sku_prices": len(extra["sku_prices"]), "stock_rows": len(extra["stock_fg"]) + len(extra["stock_mat"]),
                        "salaries": len(extra["salaries"])}}
 
@@ -343,7 +329,8 @@ async def apply_fill(db, parsed: dict, user: dict | None) -> dict:
         await db.rahaza_cash_accounts.update_one({"gl_account_code": a["gl_account_code"]}, {"$set": p})
     for s in parsed["stores"]:
         await db.marketing_platform_accounts.update_one({"account_code": s["account_code"]}, {"$set": {"coa_cash_code": s["coa_cash_code"], "updated_at": _now()}})
-    bom_res = await apply_bom_lines(db, parsed.get("bom_lines") or [], user)
+    from core.bom_fill import apply_bom_groups
+    bom_res = await apply_bom_groups(db, parsed.get("bom_groups") or [], user)
     for m in parsed.get("models") or []:
         await db.rahaza_models.update_one({"id": m["model_id"]}, {"$set": {"weight_gram": m["weight_gram"], "updated_at": _now()}})
     from core.gap_workbook import apply_extra
