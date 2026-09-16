@@ -1,0 +1,81 @@
+name: dahost
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["mongod", "--bind_ip_all", "--quiet", "--wiredTigerCacheSizeGB", "1"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      ENV: production
+      TZ: Asia/Jakarta
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: https://${DOMAIN}
+      REACT_APP_BACKEND_URL: https://${DOMAIN}
+      API_URL: https://${DOMAIN}
+      BASE_URL: https://${DOMAIN}
+      WEBAUTHN_RP_ID: ${DOMAIN}
+      WEBAUTHN_ORIGIN: https://${DOMAIN}
+      WEBAUTHN_RP_NAME: DA ERP
+      ALLOW_DEMO_SEED: "false"
+      SEED_DEFAULT_LOCATIONS: "false"
+      MASTER_IMPORT_INITIAL_PASSWORD: ${MASTER_IMPORT_INITIAL_PASSWORD}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - uploads:/app/uploads
+      - backups:/app/backups
+      - ./golive:/app/private/golive
+    expose:
+      - "8001"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        REACT_APP_BACKEND_URL: https://${DOMAIN}
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  mongo_data:
+  uploads:
+  backups:
+  caddy_data:
+  caddy_config:

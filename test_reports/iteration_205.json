@@ -1,0 +1,26 @@
+{
+  "summary": "Full QA Portal Keuangan (Laporan 12 Bulan · Neraca Lajur · Saldo Awal Go-Live · Arus Kas per Akun · COA cash_flow_group). Backend pytest 26/26 PASS termasuk E2E jurnal Apr 2026 (POST → cek pnl-monthly Apr[3]=500000, worksheet net_income≥500000, cash-flow OPR item 4-1100 inflow=500000 & unexplained=0, balance-sheet-monthly balanced=true → void → Mongo cleanup). Opening Balance lifecycle: status kosong → template xlsx (6 sheet) → preview OK/HEADER err/D≠K + balance_to_retained → apply → posted+locked → apply-2 =409 → void force=true → status null → cleanup Mongo. COA cash_flow_group: semua akun aktif punya OPR/INV/PND, PUT XXX=400, PUT INV=200, revert OPR. Regresi TB/GL/JE-list/BS/PL semua 200 & TB balanced. Frontend UI: semua data-testid ada dan berfungsi (hub-tab-worksheet/pnl12/bs12/cashflow, cf-view-account + KPI + grup + export, ob-page + apply flow, coa-view-flat + coa-cfg-4-1100=OPR + coa-input-cfgroup di editor).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_finance_portal_qa.py",
+    "/app/test_reports/pytest/finance_portal_qa.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "core/fin_statements.py rapi (~408 baris) — SSOT untuk layar & xlsx, tidak ada duplikasi.",
+    "opening_balance.py memakai mesin jurnal yang sama dengan rahaza_journals (via import di dalam fungsi) — konsisten dengan aturan validate/period/mirror. Void jurnal opening_balance benar-benar butuh force=True (sesuai instruksi review).",
+    "compute_cash_flow_by_account: opening_balance dikecualikan dari periode & masuk opening_cash_gl — perilaku sesuai sheet Arus-K. Terverifikasi via test E2E dengan unexplained=0.",
+    "PUT /api/rahaza/coa/accounts/{id} memvalidasi cash_flow_group ∈ {OPR,INV,PND} → 400 untuk nilai lain (terverifikasi)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_finance_portal_qa.py (baru)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% (semua data-testid ditemukan & render tanpa error)"},
+  "test_credentials": "admin@garment.com / Admin@123",
+  "seed_data_creation": "Tidak ada residu — semua jurnal uji (1 manual QA-F48 Apr-2026 + 1 opening_balance) sudah di-void & dihapus dari rahaza_journal_entries + rahaza_journal_lines by je_id. DB tetap 0 jurnal.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_finance_portal_qa.py sudah komprehensif untuk 4 fitur baru + regresi. Menggunakan pymongo langsung untuk cleanup jurnal uji. Rate limit login 10 req/60s per IP → satu token modul-scope. Endpoint void jurnal opening_balance/non-manual wajib body {reason, force:true}.",
+  "rca of the issue": "Tidak ada bug/ketidaksinkronan ditemukan pada fitur yang diuji."
+}

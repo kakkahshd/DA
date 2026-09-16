@@ -1,0 +1,24 @@
+{
+  "summary": "Iter 118 verification (Sales Returns + Sales Report + PDF Template 'sales-note' + PPN-after-discount). Backend: iter118 pytest 7/7 green (test_iter118_sales_returns_report.py). Regression: iter115_internal_handover 5/5, iter116_fg_valuation_backfill 7/7, iter117_sales_cron 12/12 — total 24/24 green. Balance sheet GET /api/rahaza/finance/reports/balance-sheet returns balanced=true after suite. Backend contract verified via curl: GET /api/sales/report?group_by=customer&format=csv → 200 text/csv with 'Penjualan Bersih' header and 'TOTAL' row; GET /api/sales/report?group_by=xx → 400; GET /api/pdf-templates/catalog contains doc_key='sales-note' with title='NOTA PENJUALAN' and columns [no, sku, description, qty, unit, price, amount]; GET /api/sales/direct-sales/{uuid}/pdf → 200 application/pdf starting with %PDF (3564 bytes). Frontend: deep link ?portal=sales&module=sales-direct loads direct-sales-page with sales-new/sales-refresh/sales-table and 3 seeded rows (SL-20260905-001..003). Opening LUNAS note (sale-view-SL-20260905-002) shows sale-detail modal with sale-detail-pdf, sale-detail-return, sale-detail-items, sale-detail-gl, sale-detail-balance, sale-returns-list including historical row sale-return-row-RT-20260905-001. Clicking sale-detail-return renders sale-return-form with all required testids: sale-return-qty-0, sale-return-cond-0, sale-return-reason, sale-return-refund, sale-return-account, sale-return-submit. Deep link ?portal=sales&module=sales-report loads sales-report with report-refresh/report-export-csv/report-group-tabs and all four tabs (report-group-customer/sku/day/month toggle successfully), report-from/report-to date range inputs, KPI cards report-kpi-notes/net/deductions/cogs/margin, report-table with report-row-{cust_id} and report-total-row. CSV export click triggers a download 'laparan_penjualan_customer_2026-09-01_2026-09-05.csv'. Numbers on customer view (bruto Rp 870.000 / diskon Rp 10.000 / retur Rp 155.000 / bersih Rp 705.000 / HPP Rp 196.000 / margin 72.2%) match the pytest-computed totals net_sales = bruto − diskon − retur and margin = net − HPP. PPN-after-discount confirmed inside test_01 (subtotal 400.000, tax 41.800 on 380.000, total 421.800; AR JE has 4-1300 Dr 20.000, 4-1100 Cr 400.000, 2-1400 Cr 41.800, gl_ar_account_code 1-1301-*, ar_je_id set, no ar_post_error). Retur paid-note cash refund (test_02): 1 pcs × 100.000 × (380k/400k) = 95.000 + PPN 10.450 = 105.450, cn_je_id + cogs_je_id + refund_je_id all set, fg_cost_layers new layer with batch.source=sales_return qty_remaining=1 unit_cost=40.000, rahaza_cash_movements direction=out amount=105.450, GL still balanced. Retur credit-note applied to open invoice (test_03): applied_to_invoice=50.000, no refund, damaged item does not return to stock (verified _stock() == 5). Over-limit retur → 400 'maksimal retur 3'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter118_sales_returns_report.py",
+    "/app/test_reports/pytest/iter118.xml",
+    "/app/test_reports/pytest/iter115_116_117.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PDF endpoint /api/sales/direct-sales/{id}/pdf uses UUID id, not the human-readable note_number (SL-20260905-*). Frontend correctly uses the uuid but external API callers may be confused; consider accepting both.",
+    "SaleDetailModal dialog is missing an aria-describedby (console warning 'Missing Description or aria-describedby={undefined} for {DialogContent}') — accessibility nit only.",
+    "Seed FG in some rows still has no fg_cost_layers → HPP falls back to master ('perkiraan HPP master') as designed. FG-valuation cron correctly flags the resulting GL discrepancy."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (iter118 7/7 + regression 24/24)", "frontend": "100% of tested surfaces"},
+  "test_credentials": "admin@garment.com / Admin@123 (token reused; login response field 'token').",
+  "seed_data_creation": "None new. Iter118 pytest is fully self-cleaning (test_99_cleanup removes materials, layers, JEs, invoices, credit notes, movements, customer). Existing seed (SL-20260905-001..003, RT-20260905-001) left intact.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iter118 fully green. All testids required by review (sale-detail-return, sale-return-form, sale-return-qty-0, sale-return-cond-0, sale-return-reason, sale-return-refund, sale-return-account, sale-return-submit, sale-returns-list, sale-return-row-*, sale-detail-balance, sales-report, report-group-*, report-kpi-*, report-from/to, report-export-csv, report-table, report-total-row) are present. PDF endpoint takes UUID id, not note_number.",
+  "rca of the issue": "N/A — no issues found."
+}

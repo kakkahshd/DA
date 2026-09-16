@@ -1,0 +1,38 @@
+{
+  "summary": "Verified all 4 finance fixes (iter 119) on Dewi Aditya ERP. Backend: 11/11 pytest passed. FIX-1 (AR discount balanced JE + PPN-after-discount): totals 1.000.000 / 950.000 / 104.500 / 1.054.500 exact, gl_je_id issued, JE balanced Dr=Cr with lines Piutang 1-1301-* Dr 1.054.500, Diskon 4-1300 Dr 50.000, Pendapatan 4-1xxx Cr 1.000.000, PPN 2-1400 Cr 104.500; validation: discount>subtotal → 400. FIX-2: two AR payments same date & amount produce two distinct _payment_id & je_id (already_posted=false), paid_amount=200.000, GET /payments returns 2 rows; AP payments idem. FIX-3 backend: void of ar_invoice JE → 409 'dibuat otomatis oleh modul'; ar_invoice/ap_payment JEs list with hub_voidable=false; manual JE hub_voidable=true and void 200; force w/o reason → 400; superadmin force+reason on ar_payment JE → 200 forced:true unlinked_sources present. FIX-4: kasbon 300k → payroll run has payslip deduction {type:kasbon,kasbon_id,amount:300000}; finalize → _kasbon_result.ok true, our result amount_deducted=300000 new_outstanding=0 new_status=paid_off gl.ok true; kasbon detail outstanding=0 status=paid_off repayments has run_id method=payroll_deduction. Frontend: FIX-1 create form summary/total show exact expected Rp values; FIX-3 Jurnal Umum: expanding ar_invoice / ap_payment rows shows [data-testid=je-void-locked] with lock message and no [data-testid=je-void]; manual/voided rows behave correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/rahaza/payroll-runs/{id}/finalize", "issue": "Main payroll _posting_result.ok=false with 'Jurnal tidak seimbang. Dr 60000 ≠ Cr 1.200.000' — the main payroll JE (aggregated Dr allowance/gaji vs Cr utang/kasbon/potongan) is unbalanced when multiple outstanding kasbons of same employee are deducted; kasbon repayment JEs (per-kasbon Dr 2-1200 / Cr piutang karyawan) post correctly. Not part of FIX-4 spec but observed while running FIX-4 test."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter119_finance_fixes.py",
+    "/app/test_reports/pytest/iter119.xml"
+  ],
+  "action_items": [
+    "Investigate main payroll _posting_result unbalanced when employee has multiple outstanding kasbons (Dr allowances vs Cr aggregate is 60k vs 1.2M in test data). This is orthogonal to the 4 fixes but appears in finalize response.",
+    "Seed cleanup: created test customer TESTITER119HHMMSS, several AR invoices AR-20260906-00x totaling 5.272.500, kasbon KSB-202609-00007 (paid_off), 1 manual JE (voided). If cleanup endpoints exist, purge these; else preserve for next testing agent."
+  ],
+  "critical_code_review_comments": [
+    "rahaza_finance.py _invoice_totals: correct DPP-after-discount + PPN base is DPP. Good.",
+    "rahaza_finance.py _record_payment_doc: unique pay_id per payment → drives idempotency key differ ⇒ two JEs. Good design.",
+    "rahaza_journals.py HUB_VOIDABLE_SOURCES + hub_voidable field: cleanly enforced; frontend gates button visually.",
+    "rahaza_payroll_runs.finalize_run: main JE posting logic likely does not include kasbon repayment as credit line offset; investigate imbalance if outstanding kasbons > current-run payslip contribution."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter119_finance_fixes.py"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% of items verified (FIX-1 summary/total, FIX-3 lock/void visibility)"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin) — used once, token reused",
+  "seed_data_creation": "Created 1 customer (TESTITER119*), 5 AR invoices (AR-20260906-001..005 + INV-MKL variants pre-existing), 1 AP invoice, kasbon KSB-202609-00007 (300k, paid_off), 2 manual journals (voided). Retained in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 4 iter-119 finance fixes are correctly implemented per spec (both backend and frontend). Regression endpoints: /api/rahaza/finance/reports/trial-balance and /balance-sheet respond 200. Only observed side finding: main payroll JE remains unbalanced when multiple kasbons exist for same employee — not part of FIX-4 acceptance criteria.",
+  "rca of the issue": "N/A — no critical bug in the 4 target fixes."
+}

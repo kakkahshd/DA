@@ -1,0 +1,28 @@
+{
+  "summary": "RETEST iterasi 127 setelah fix num()/is_num(). Semua 15 assertion unit LULUS: num(0.3)==0.3, num(0.24)==0.24, num(200.0)==200.0, num(129000.0)==129000.0, num('0,24')==0.24, num('95.000')==95000, num('Rp 95.000')==95000, num('1.234.567')==1234567, num('1.234,56')==1234.56, num('0.155')==0.155, num('12.5')==12.5, num('1 karung')==0.0, is_num('1 karung')==False, is_num(0.3)==True, num(True)==0.0. Skenario APPLY TA9-* penuh LULUS: dry-run bersih, --apply pertama menyimpan 10 sheet, --apply kedua semua 'diperbarui' (idempotent), tidak ada duplikasi. Verifikasi Mongo: rahaza_boms.materials[0].qty == 0.3 (bug KRITIS iterasi 126 sudah fixed — bukan 3.0 lagi); TA9-KAIN unit_cost 50000, gsm 180.5, width_cm 160; SKU weight_gram 220.5, retail_price_master 89000; catalog platform_price 99000, harga_coret 129000; KOL phone '081299900011'. Client file /app/uploads/template_client.xlsx tetap exit 1 dengan 1990 BARIS BERMASALAH + 53 peringatan, tidak menulis DB. Semua dokumen TA9-* dibersihkan setelahnya.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/tmp/build_ta9.py",
+    "/tmp/verify_ta9.py",
+    "/tmp/verify_and_cleanup.py",
+    "/tmp/client_dry.log"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix num()/is_num() sudah tepat: guard isinstance(v,(int,float)) di awal mengembalikan float(v) langsung, sehingga desimal Excel (0.3, 180.5, 220.5) tidak lagi dianggap pemisah ribuan. Aturan string tetap membedakan ribuan Indonesia ('95.000','1.234.567') dari desimal dot ('0.155','12.5'). Regex heuristik cukup andal untuk kasus umum importir garment.",
+    "File masih ~810 baris; ke depan pertimbangkan pecah per-sheet handler + pytest unit khusus num()/is_num() agar regresi seperti ini tertangkap sebelum menyentuh Mongo."
+  ],
+  "updated_files": ["/tmp/build_ta9.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A"},
+  "test_credentials": "Tidak diperlukan (CLI + Mongo langsung via /app/backend/.env).",
+  "seed_data_creation": "Sintetis TA9-* dibangun /tmp/build_ta9.py → apply×2, verifikasi, lalu dihapus dari 8 koleksi (locations/colors/sizes/models/materials/boms/accounts/catalog/kol). Baseline Mongo kembali seperti semula.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug KRITIS num() dari iterasi 126 sudah diperbaiki dengan sempurna dan tervalidasi. Tidak ada data uji TA9-* tersisa di Mongo. Client file bermasalah (1990 error) masih perlu diperbaiki oleh pengisi Excel, bukan bug importir.",
+  "rca of the issue": "Fix diterapkan di num()/is_num(): guard `isinstance(v,(int,float))` dan `not isinstance(v,bool)` MENDAHULUI logika _num_text(), sehingga nilai numerik dari openpyxl langsung dikembalikan sebagai float tanpa manipulasi string. Untuk input string, heuristik _num_text() membedakan: (a) koma+titik → ribuan Indonesia; (b) hanya koma → desimal Indonesia; (c) hanya titik → ribuan HANYA bila pola 'ddd.ddd' persis 3 digit di kanan DAN bagian kiri 1-3 digit non-nol atau muncul >1 titik. Semua kasus edge dari daftar review LULUS."
+}

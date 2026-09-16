@@ -1,0 +1,23 @@
+{
+  "summary": "Iter113 QA complete. Pytest suite of 83 tests (test_iter113_period_guard + test_iter113_payroll_components + test_iter108/110/111/112) all PASS in ~90s. H-08 period-guard verified end-to-end via API: /periods/policy returns future_days_max=31 and auto_years=[2025,2026,2027]; manual journal with date >31d future -> 400 'masa depan'; date 2019-01-15 -> 400 'belum dibuka' and no 2019 periods auto-created; close current month -> posting 423 'closed'; reopen -> posting 200; draft with future date allowed (observation). H-02 payroll components verified via synthetic run 'run-qa-agent': POST /payroll-runs/{id}/post-to-gl produces balanced JE 7.945.000 with exact split 6-2100 Dr 7.945.000 / 2-1200 Cr 7.665.000 (net+kasbon) / 2-1301 Cr 100.000 / 2-1500 Cr 180.000; re-post idempotent (only 1 JE, source_ref payroll:run-qa-agent); pay-bpjs 200 (JE bpjspay:run-qa-agent, amount 180000) then 400 on repeat; pay-pph21 200 (JE pph21pay:run-qa-agent, amount 100000). Bad run with inconsistent totals -> post_error saved 'Komponen potongan tidak konsisten...', no JE created. Regression: balance-sheet balanced=true & orphan_account_lines empty; /api/finance/bank-recon/summary 200; /api/rahaza/ar-aging 200. Frontend fin-periods module: data-testid=pr-policy-banner rendered with '31 hari' and '2025-2027'; 12 open periods for 2026 shown. DB state fully restored to baseline (JE=1, JL=3, no orphans, no 2019 periods, no run-qa-*).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter113_period_guard.py",
+    "/app/backend/tests/test_iter113_payroll_components.py",
+    "/app/backend/tests/qa_iter113_api.py",
+    "/app/test_reports/pytest/iter113_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Task prompt referenced endpoint POST /payroll-runs/{id}/post-je but actual route is /post-to-gl (routes/rahaza_payroll_runs.py line 247). Not a bug, just a doc-mismatch — worth aligning naming across docs/tests.",
+    "Draft (post:false) manual journals with future date >31d are accepted (200). This is consistent with the stated design (guard applies only at posting) — acceptable observation."
+  ],
+  "updated_files": ["/app/backend/tests/qa_iter113_api.py"],
+  "success_rate": {"backend": "100% (83/83 pytest + all API QA checks green)", "frontend": "100% (banner + periods grid verified)"},
+  "test_credentials": "admin@garment.com / Admin@123 (used)",
+  "seed_data_creation": "Synthetic payroll run-qa-agent + run-qa-agent-bad + 4 payslips created in Mongo then fully cleaned up. JE/JL counts before=after (1/3).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "DB baseline restored (JE=1, JL=3). All 83 pytest cases in the iter108/110/111/112/113 suite green. qa_iter113_api.py is a self-cleaning API/DB QA script covering H-08 (period guard + policy + close/reopen) and H-02 (payroll component posting, pay-bpjs, pay-pph21, inconsistency detection) and can be reused for regressions in later iterations."
+}

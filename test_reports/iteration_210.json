@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 210 — Marketing Settlements (Tahap 1) + Withdrawals (Tahap 2) end-to-end. Backend pytest 15/15 PASS. Frontend UI verified via Playwright: title/kartu saldo/Tahap 2 panel/settlement form/edit toko dialog semua sesuai spec. Cleanup TESTQA data selesai.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter210_marketing_pencairan.py",
+    "/app/test_reports/pytest/iter210.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "marketing_settlements.py besar (~1000 lines) — pertimbangkan split submodul _resolve_coa / balance / import mapping ke file terpisah untuk maintainability.",
+    "Response wrapper tidak konsisten: sebagian endpoint return {ok,data:...}, sebagian list mentah. Standarisasi bermanfaat untuk konsumen FE/test."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter210_marketing_pencairan.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin)",
+  "seed_data_creation": "Selama test dibuat 1 settlement (TESTQA-*-S1, 8.5jt) + 1 withdrawal via API (TESTQA-*-WD1, 5jt) + 1 withdrawal via UI (TESTQA-UI-WD2, 1jt) untuk Shopee GHS. SEMUA dihapus di cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend: BASE_URL wraps API responses in {ok,data:...} — gunakan _unwrap helper di test_iter210. Journal lookup via GET /api/rahaza/journals?search=<source_ref>, lalu filter exact e['source_ref']==ref (search bersifat partial). Settlement POST butuh field 'platform' (bukan hanya account_id). Withdrawal PUT butuh full body (account_id, withdrawal_date, amount, reference). Coa_cash_code toko harus di-set sebelum bisa withdraw (default 1-1201 untuk Shopee GHS). FE hash routes: /#fin-marketplace-settlement dan /#marketing-accounts. Kartu SHP-01 amount adalah balance = released_total - withdrawn_total.",
+  "cleanup_done": "5 marketing_settlements, 5 marketing_platform_withdrawals, 7 rahaza_journal_entries, 20 rahaza_journal_lines dengan source_ref prefix TESTQA telah dihapus dari MongoDB."
+}

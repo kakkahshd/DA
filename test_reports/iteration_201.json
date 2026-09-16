@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 201 — Verifikasi kebijakan penomoran rahaza_customers.code (auto/manual) + core.catalog_stock.blocked_location_ids memblokir lokasi storage_role='karantina'. Backend 6/6 pytest lulus. Frontend UI Master Pelanggan → tombol 'Pelanggan Baru' menampilkan input readonly data-testid='cust-form-code-auto' berisi 'CUST-0002', label 'Kode Pelanggan (otomatis)', hint 'Dibuat sistem saat disimpan (pola CUST-{SEQ:4})…'; setelah Simpan baris muncul dengan data-testid='cust-row-CUST-0002'. Data uji UJI QA UI + sub-ledger COA sudah dibersihkan. Mode penomoran dikembalikan ke default (field 'mode' tidak ada di doc_number_configs).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_results": {
+    "test_policy_default_auto": "PASS — GET /api/doc-number-policy?key=rahaza_customers.code → 200, mode='auto', format='CUST-{SEQ:4}', contoh cocok pola CUST-####",
+    "test_create_customer_auto_success": "PASS — POST /api/sales/customers {name:'UJI QA Pelanggan'} → 200 code='CUST-####', persisten di mongo",
+    "test_create_customer_auto_reject_manual_code": "PASS — POST dengan code:'BEBAS-1' di mode auto → 400 pesan mengandung 'OTOMATIS'",
+    "test_manual_mode_flow": "PASS — PUT /api/admin/doc-numbering mode=manual → 200; POST tanpa code → 400 (wajib/MANUAL); POST code='ABC' → 400 ('tidak mengikuti pola'); POST code='CUST-9901' → 201 code tersimpan sama; mode dikembalikan (unset).",
+    "test_blocked_location_ids_includes_karantina": "PASS — core.catalog_stock.blocked_location_ids memuat id lokasi GD-L1-QC (storage_role='karantina') dan TIDAK memuat GD-L1-RAK (storage_role='fg')",
+    "test_cleanup_no_residual": "PASS — tidak ada rahaza_customers name ^UJI QA tersisa; doc_number_configs.rahaza_customers.code tidak memiliki field 'mode'"
+  },
+  "frontend_results": {
+    "sales_customers_module_load": "PASS — #sales-customers termuat (login UI admin@garment.com)",
+    "form_auto_code_readonly": "PASS — input data-testid='cust-form-code-auto' visible, readonly, value='CUST-0002'",
+    "label_hint": "PASS — label 'Kode Pelanggan (otomatis)'; hint 'Dibuat sistem saat disimpan (pola CUST-{SEQ:4}). Ubah ke manual di Administrasi Sistem → Penomoran Dokumen.'",
+    "save_creates_row": "PASS — POST sukses; toast 'Pelanggan tersimpan'; baris data-testid='cust-row-CUST-0002' menampilkan UJI QA UI"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter201_docnum_customer.py",
+    "/app/test_reports/pytest/iter201.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sales_direct.create_customer: pemeriksaan duplikat kode dilakukan SETELAH issue_number, tetapi issue_number di mode auto sudah menjamin unik lewat counter, dan di mode manual sudah 409 di dalam issue_number. Pemeriksaan tambahan (find_one dengan active:True) sedikit redundan namun aman (tidak menyebabkan bug).",
+    "DocNumberField mode auto menampilkan policy.nomor_berikutnya bila ada; endpoint /api/doc-number-policy sesi ini mengembalikan 'contoh' (CUST-0001) — nilai riil 'nomor_berikutnya' agar preview akurat perlu ctx (opsional).",
+    "core.catalog_stock.blocked_location_ids sudah menggabungkan sumber blokir dengan benar (blocked/quarantine/role/storage_role/regex KARANTINA) — sesuai gate K-6a."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter201_docnum_customer.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin)",
+  "seed_data_creation": "Tidak ada. Pelanggan uji UJI QA* dan sub-ledger COA UJI QA* sudah dihapus. Mode penomoran rahaza_customers.code sudah dikembalikan ke default (unset).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "File pytest cepat: /app/backend/tests/test_iter201_docnum_customer.py — regressi kebijakan penomoran kode pelanggan + blokir stok katalog karantina. Endpoint kunci: GET/PUT /api/doc-number-policy, PUT /api/admin/doc-numbering, POST /api/sales/customers. Frontend: #sales-customers → cust-add → cust-form-code-auto/cust-form-code-hint/cust-form-code-wrap.",
+  "rca of the issue": "N/A — tidak ada bug ditemukan; kedua perbaikan gate (docnum untuk pelanggan + blokir storage_role karantina) berperilaku sesuai spesifikasi."
+}

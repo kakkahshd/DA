@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 203 — Verifikasi keputusan owner 2026-09-12: (A) pemindahan Kategori/Varian/BOM/Ukuran/Warna dari Portal Produksi → Master Produk ke Portal RnD → Master Produk (id modul rnd-master-product-hub); Portal Produksi → Master Produk hanya menyisakan tab Model DA. (B) Matriks BOM menampilkan satu baris per BOM model×ukuran×warna dengan kolom Warna dan ringkasan 'N resep · N ukuran · N warna'. Backend + Frontend semua PASS. Data master tidak diubah.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_results": {
+    "auth_admin_login": "PASS — admin@garment.com/Admin@123 → token",
+    "GET /api/rahaza/models/{DA-1101}/bom": "PASS — model id c0fcc612-4cad-45ca-81d1-ece65a66f3d1; matrix 13 baris (6 ALLSIZE × warna berbeda: BRG,CRL,GRY,HTM,MGT,MHG + 7 ukuran S/M/L/XL/XXL/STD/JMB dengan bom_id=null). Semua bom_id unik. panel_code tiap baris ALLSIZE = 'CUT-DA-1101-<WARNA>-ALLSIZE'. bom_count=6, size_count=1, color_count=6. Ukuran tanpa BOM tetap muncul 1 baris dgn bom_id=null.",
+    "GET /api/rahaza/locations": "PASS — lokasi GD-L1-QC ada dengan storage_role='karantina'."
+  },
+  "frontend_results": {
+    "login_admin_ui": "PASS",
+    "rnd_master_product_hub": "PASS — #rnd-master-product-hub termuat, header eyebrow 'Portal RnD · Master Data (SSOT)', 5 tab (tab-categories, tab-variants, tab-bom, tab-sizes, tab-colors). TIDAK ada tab-models. Cross-link data-testid='master-produk-crosslink-rnd' hadir & mengarah ke Portal Produksi (klik → prod-master-product-hub termuat).",
+    "prod_master_product_hub": "PASS — #prod-master-product-hub hanya menampilkan tab-models (1), tab-bom=0. Header 'Portal Produksi · Master Data' hadir. Cross-link data-testid='master-produk-crosslink-production' membuka #rnd-master-product-hub.",
+    "rnd_bom_matrix_da1101": "PASS — tab BOM default terpilih DA-1101; kolom 'Warna' hadir; 6 baris ALLSIZE dengan data-testid bom-row-ALLSIZE-{BRG,CRL,GRY,HTM,MGT,MHG}; ringkasan data-testid='bom-matrix-summary' = '6 resep · 1 ukuran · 6 warna'. Klik data-testid='bom-open-ALLSIZE-CRL' → tab 'Editor' aktif (aria-selected=true) dan body menampilkan CUT-DA-1101-CRL-ALLSIZE + CARAMEL + CRL. Tidak melakukan Simpan.",
+    "deep_link_prod_bom": "PASS — #prod-bom → rnd-master-product-hub, tab-bom aria-selected=true.",
+    "deep_link_prod_sizes": "PASS — #prod-sizes → rnd-master-product-hub, tab-sizes aria-selected=true.",
+    "deep_link_prod_models": "PASS-note — #prod-models redirect ke modul 'prod-models-bom' (RahazaModelsAndBOMModule variant='production') sehingga tab-models aria-selected=true, tetapi wrapper testid 'prod-master-product-hub' TIDAK terpasang (redirect target di moduleRegistry adalah 'prod-models-bom', bukan 'prod-master-product-hub'). Perilaku user identik (halaman Model DA), namun kurang konsisten dengan navigasi menu utama.",
+    "warehouse_locations": "PASS — #wh-master → tab-locations klikable; baris GD-L1-QC menampilkan kolom 'Peran Gudang' berbunyi 'Karantina QC — TIDAK ikut stok jual'."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Opsional-kecil) Konsistensikan redirect deep-link #prod-models di frontend/src/components/erp/moduleRegistry.js dari makeRedirect('prod-models-bom','models') → makeRedirect('prod-master-product-hub','models') agar sama-sama membuka wrapper hub Produksi (dengan testid prod-master-product-hub dan header 'Portal Produksi · Master Data'). Fungsional saat ini tetap benar (Model DA tampil), hanya wrapper hub tak dimuat sehingga testid hub kosong."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/rahaza_bom.py get_model_bom sudah mengurutkan baris per (size, color_code) dan mengembalikan bom_count/size_count/color_count — semua field kunci lengkap.",
+    "RahazaModelsAndBOMModule.jsx VARIANTS memisahkan tabs production=['models'] vs rnd=['categories','variants','bom','sizes','colors'] dengan cross-link timbal-balik — bersih.",
+    "Deep-link #prod-models perlu diselaraskan ke wrapper hub Produksi baru agar breadcrumb/testid konsisten (lihat action_items)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100% (fungsional)"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin)",
+  "seed_data_creation": "Tidak ada. Tidak menyimpan/mengubah BOM, model, warna, ukuran, kategori.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Model DA-1101 id UUID saat ini: c0fcc612-4cad-45ca-81d1-ece65a66f3d1 (berubah dari iter 202 karena impor ulang master). Endpoint utama: GET /api/rahaza/models/{id}/bom — matrix baris per (size,color) + bom_count/size_count/color_count. Deep-link: #rnd-master-product-hub (5 tab), #prod-master-product-hub (1 tab Model DA), #prod-bom → rnd/tab-bom, #prod-sizes → rnd/tab-sizes, #prod-models → prod-models-bom (variant=production) — pertimbangkan penyelarasan ke prod-master-product-hub.",
+  "rca of the issue": "Tidak ada bug. Hanya 1 catatan penyelarasan redirect deep-link #prod-models (prod-models-bom vs prod-master-product-hub) — dampaknya kosmetik (testid wrapper hub tidak terpasang), tidak memengaruhi fungsionalitas atau alur user."
+}

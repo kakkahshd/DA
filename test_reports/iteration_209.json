@@ -1,0 +1,19 @@
+{
+  "summary": "Verified fix for BUG UTAMA: unggah CSV iklan Shopee tidak lagi ditolak dengan pesan 'Penyimpanan berkas tidak tersedia: EMERGENT_LLM_KEY belum diset'. Backend object_storage.py sekarang default LOCAL — berkas tersimpan di /app/uploads/marketing-data-import/<sid>.csv. Semua 8 test PASSED (1 skip untuk endpoint catalog image yang tidak ada di API v1). Regresi (trial-balance, /api/uploads 404, notif tidak banjir 43 doc) semua hijau. Frontend Portal Marketing → Penjualan Multi-channel → Impor Data memuat wizard 6 langkah tanpa error. Notif topbar = 43 (dulu 2064). Semua data uji dibersihkan.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_local_storage_upload.py", "/app/test_reports/pytest/it209.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/object_storage.py:64 put_object masih membungkus panggilan object-storage dalam try/except sehingga tidak akan pernah melempar walau di mode 'object' — routes/marketing_data_import.py:445 pesan '503 Penyimpanan berkas tidak tersedia' effectively dead-code sekarang; boleh dibuang untuk kejelasan.",
+    "backend/routes/marketing_data_import.py sudah 3555 baris — layak dipecah (upload/preview/mapping/commit/rollback per module) untuk maintainability."
+  ],
+  "updated_files": ["/app/backend/tests/test_local_storage_upload.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (smoke)"},
+  "test_credentials": "admin@garment.com / Admin@123",
+  "seed_data_creation": "Tidak ada — sesi impor uji + berkas /app/uploads/marketing-data-import/*.csv sudah dihapus via DELETE /sessions/{id}. Probe file /app/uploads/tests/it209_probe.bin juga dihapus. DB counts: marketing_ads_data=0, marketing_sales_data=0, marketing_orders=0, marketing_data_import_sessions=0, marketing_alert_runs=1 (bukan uji Anda), marketing_kol_login_attempts=0, notifications=43 (semua tipe 'rahaza', 0 low_stock).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix iteration 209 fully verified. Semua path unggahan (marketing data import + object_storage unit) jatuh ke lokal. Endpoint catalog image upload (POST /api/marketing/catalog-items/{id}/image) tidak ditemukan di /api/marketing/catalog-items — jika perlu diverifikasi, cari route yang tepat (mungkin di dewi_client_uploads.py).",
+  "rca of the issue": "BEFORE: object_storage.init_storage() melempar RuntimeError kalau EMERGENT_LLM_KEY kosong ATAU env FILE_STORAGE tidak set — routes/marketing_data_import.py:443 memanggil _put_object yang mengangkat exception → 503. AFTER: put_object memeriksa _mode()=='local' terlebih dahulu (default), langsung write ke UPLOAD_ROOT (/app/uploads). Object storage hanya dipakai bila FILE_STORAGE=object DAN EMERGENT_LLM_KEY ada; kegagalan tetap fall back ke lokal. Verifikasi: POST /api/marketing/data-import/upload dgn CSV Shopee CPC → 200, berkas ada di /app/uploads/marketing-data-import/<sid>.csv, no error message."
+}

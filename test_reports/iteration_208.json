@@ -1,0 +1,36 @@
+{
+  "summary": "QA iter208 — Jalan pintas pengisian master (BOM copy-missing / add-acc-bulk / recalc-HPP standar) + Template Excel Harga·Satuan·Rekening (download → preview → apply) + login creator KOL Dewi@123 + shift default 08:00–16:00 semua karyawan. Backend pytest 10/10 PASS: (1) GET /api/rahaza/master/fill-template → xlsx PETUNJUK/MATERIAL/REKENING/TOKO tanpa CUT-*; (2) POST /fill-preview A-BIS-0001 roll×21.919 harga 337553 → unit_cost=15400.02, totals {materials:1,accounts:1,stores:1,ok:true}; error path TOKO ZZZ-999 → 'tidak ada', MATERIAL isi kosong satuan beli≠dasar → 'isi_per_satuan_beli wajib'; (3) POST /fill-apply → materials_updated=1, accounts_updated=1, stores_updated=1, panels_standard_costed & models_hpp_applied ada; Mongo terverifikasi (A-BIS-0001 unit_cost≈15400.02, purchase_uom roll, pack_size 21.919, uoms 2 level; 1-1211 no_rek '999' atas_nama 'QA'; SHP-04 coa_cash_code '1-1213'; rahaza_material_cost_history source 'template_harga_owner'). Data DIKEMBALIKAN semula (unit_cost 15400, pack_size 1.0, uoms 1 level; 1-1211 kosongkan no_rek/atas_nama; SHP-04 unset coa_cash_code; hapus cost_history uji). (4) POST /bom/copy-missing model_id → 200; idempoten (call 2 = created 0). (5) POST /bom/add-lines A-BIS-0001 → boms_touched>0, appended>0; idempoten; baris uji dibersihkan via $pull. (6) POST /recalc-hpp → models_hpp_applied ≥ 70 (verified count(hpp>0 & hpp_source=bom) ≥70; std CUT-* value_status='standard' unit_cost>0). (7) creator-portal login iori.oliviara@creator.id / Dewi@123 → 200 token; sandi salah → 401. (8) Mongo shift REG 08:00–16:00 aktif; semua 25 karyawan aktif memiliki shift_id = REG (no_shift=0, others=0). FRONTEND: login admin → /#rnd-master-product-hub → tab-bom → bom-shortcuts + bom-copy-missing-model/all + bom-add-acc-bulk + bom-recalc-hpp semua terdeteksi; bom-acc-bulk-dialog terbuka, picker aksesoris muncul dgn daftar material; Cancel bekerja. tab-fill → fill-page + fill-download + fill-file terdeteksi. Portal Keuangan /#fin-accounting-master-hub → hub-tab-fill + fill-page terdeteksi.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BomShortcuts model selector", "issue": "data-testid='bom-model-selector' TIDAK ditemukan; dropdown model tetap berfungsi (auto pilih DA-1101 - Lyora), tapi selector tidak dapat dites dgn selektor stabil.", "selector": "[data-testid='bom-model-selector']", "priority": "LOW"},
+      {"component": "bom-recalc-hpp toast", "issue": "Setelah klik bom-recalc-hpp, tidak ada elemen toast/status yang dapat ditangkap DOM query (kemungkinan auto-dismiss sangat cepat / render non-standar). Backend call sukses (models_hpp_applied ≥70 diverifikasi via pytest).", "selector": "[role='status'], .toast", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter208_master_fill.py",
+    "/app/test_reports/pytest/iter208.xml"
+  ],
+  "action_items": [
+    "Tambahkan data-testid='bom-model-selector' pada dropdown pemilih model di BomShortcuts (agar dapat ditest otomatis).",
+    "Tambahkan data-testid pada toast hasil bom-recalc-hpp (mis. 'bom-recalc-hpp-toast') supaya QA UI dapat memverifikasi pesan 'HPP standar: …'."
+  ],
+  "critical_code_review_comments": [
+    "core/master_fill.parse_fill_workbook menghitung unit_cost = harga_beli / isi dgn round 4 desimal → 337553/21.919 = 15400.0201 ✓ sesuai spec owner (15400.02).",
+    "core/master_fill.apply_fill membangun uoms 2 level (base m + roll factor 21.919) & menyimpan purchase_uom/pack_unit/pack_size — SSOT konversi satuan konsisten dgn wh_unit_master.",
+    "core/master_fill.bom_copy_to_missing menyalin CUT-* memakai ensure_panel + bom_line_for_panel — otomatis mengganti warna & ukuran tujuan; copied_from_bom_id tersimpan; idempoten via bom_key seen-set. Untuk kain (material_type=fabric) mencoba _fabric_for_color(fam-<WARNA>) — bila varian warna tak ada tetap dipakai apa adanya dgn note (dapat menimbulkan drift HPP saat warna belum ada di master — sudah dicatat sbg note, bukan bug).",
+    "core/master_fill.bom_add_lines_to_model idempoten benar (skip baris yg material_id/code sudah ada); resolusi via routes.rahaza_bom.resolve_bom_materials → problems list dikembalikan.",
+    "core/master_fill.recalc_standard_costs benar hanya menimpa CUT-* dgn value_status ≠ 'actual' → aktual cutting tetap prioritas; setelah update biaya panel, semua baris BOM di-refresh unit_cost_base lalu apply_model_cost per model (SSOT HPP).",
+    "routes/master_fill.py rapi (75 baris), memakai _require_fin (RBAC finance) & activity log — tidak ada MongoDB _id yg bocor karena projection {'_id':0}."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter208_master_fill.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "~92% (semua data-testid utama hadir kecuali bom-model-selector; toast recalc-hpp tak terdeteksi)"},
+  "test_credentials": "admin@garment.com / Admin@123 · creator: iori.oliviara@creator.id / Dewi@123 (must_change_password)",
+  "seed_data_creation": "Tidak ada seed baru. Sisipan uji di master DIKEMBALIKAN: A-BIS-0001 (unit_cost 15400, pack_size 1.0, uoms 1 level, unset purchase_uom/pack_unit/cost_source), 1-1211 (account_number '', holder_name ''), SHP-04 (unset coa_cash_code), rahaza_material_cost_history entri 'template_harga_owner' dihapus, baris A-BIS-0001 hasil bom_add_lines di model 5068919a…c5bff di-$pull. BOM hasil copy-missing SENGAJA tetap (permintaan owner).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iter208_master_fill.py mencakup semua endpoint /api/rahaza/master/{fill-template,fill-preview,fill-apply,bom/copy-missing,bom/add-lines,recalc-hpp} + creator-portal login + Mongo integrity shift/employees. Gunakan MODEL_WITH_MISSING='5068919a-16c1-4373-a549-c0e3c45dbcff' (2 varian tanpa BOM). Rate limit login 10/60s → 1 token modul-scope. Master DB NYATA — selalu pakai cleanup try/finally seperti pada TestFillApply/TestBomShortcuts.add_lines. BOM copy-missing tidak dibersihkan (permintaan owner).",
+  "rca of the issue": "Tidak ada bug backend. UI minor: (a) data-testid 'bom-model-selector' hilang pada dropdown model — tambahkan pada element yg sudah render 'DA-1101 - Lyora'. (b) Toast bom-recalc-hpp mungkin dirender via komponen non-role='status' atau auto-dismiss <1s sehingga DOM query tidak menangkap — beri data-testid & durasi minimum 3s."
+}

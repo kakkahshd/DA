@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "verification_by": "main_agent_retest_after_testing_agent_128",
+  "tests": {"passed": 16, "failed": 0, "duration_seconds": 41.81},
+  "junit": "/app/test_reports/pytest/master_client_package_final.xml",
+  "fixes": ["Redaksi NIK diterapkan langsung pada penulis judul, pertanyaan, dan pesan bukti Markdown."],
+  "enhanced_checks": ["Seluruh temuan terpetakan", "Nilai 465 kg di sembilan baris tetap utuh", "SHA256 isi database bukan hanya hitungan dokumen", "Snapshot 15 koleksi sebelum/sesudah paket", "Idempotensi nilai dan tipe sel"],
+  "frontend_finding_resolution": "Test-id login sudah ada di kode repo. Browser membuktikan login-email-input, login-password-input, login-toggle-password, login-submit-button dan fungsi toggle. Tidak ada perubahan UI diperlukan.",
+  "final_package": "/app/private/master_client_package_20260906",
+  "business_validation": {"errors_before": 1996, "errors_after": 625, "warnings_after": 524, "apply_performed": false, "phase_7": "DITAHAN"},
+  "scope": "Skrip paket review dan smoke halaman login/API health; bukan regresi semua modul ERP. Tidak ada apply data klien."
+}

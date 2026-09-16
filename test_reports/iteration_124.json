@@ -1,0 +1,89 @@
+{
+  "iteration": 124,
+  "date": "2026-09-06",
+  "scope": "Independent verification of 12 finance fixes (iter123) — backend direct-coroutine + REST + frontend smoke",
+  "test_files": [
+    "/app/backend/tests/test_iter124_independent_verify.py",
+    "/app/test_reports/pytest/iter124_indep.xml"
+  ],
+  "backend": {
+    "result": "14 passed, 1 failed (bug exposed)",
+    "items_pass": {
+      "cash_409": "PASS — POST duplicate code → 409; new cash account balance=1_000_000, balance_source=gl, diff=0, Mongo doc has no 'balance' field",
+      "B-11": "PASS — pay AP in draft → 400 'invoice draft…', invoice stays draft, no gl_je_id, paid_amount=0, zero JE for source_ref ap:{id}; after status→sent, partial payment 120k succeeds and receipt.pdf 200 %PDF",
+      "AR + kwitansi": "PASS — customer+invoice(disc 50k, PPN 11%)→send→pay → status paid; receipt.pdf 200 %PDF>1KB; foreign pid → 404; invoice JE balanced (Dr=Cr)",
+      "cash_gl_balance": "PASS — cash balance = 1_000_000 + AR total (1_054_500) − 120_000 = 1_934_500, diff=0, balance == balance_mutasi",
+      "balance_sheet": "PASS — /reports/balance-sheet?as_of=2026-12-31 → balanced=true, diff=0, orphan_account_lines=[]",
+      "profit_loss": "PASS — 7-120 in groups.cogs.accounts, NOT in groups.expense",
+      "cash_flow": "PASS — 200 OK for Sep 2026",
+      "M-03": "PASS — all 7-1xx accounts type=COGS (no non-COGS 7-1xx)",
+      "B-13": "PASS — arbitrary EXPENSE leaf with balance set active=false → still appears in P/L accounts",
+      "H-10": "PASS (independent amounts 222k/22k/200k) — Dr 4-1200 200_000 + Dr 2-1400 22_000 / Cr AR 222_000, balanced",
+      "M-04/B-09": "PASS (independent 2M subtotal, 75k penalti, invoice_date 2026-08-20) — Dr 7-120 1_925_000 / Cr AP 1_925_000, no 4-9000, je_date=2026-08-20, net_amount=1_925_000",
+      "B-10": "PASS (212k / PPV 12k) — Dr 2-1150 200_000 + Dr 5-1900 12_000 / Cr 2-1100* 212_000",
+      "B-12": "PASS — MI with unit_cost_applied=master+200 → JE uses applied; second MI without applied stamped with master unit_cost",
+      "M-05": "PASS (subsidi 40k, potongan 60k, adj −25k) — Dr 6-2900 85_000, Cr 7-4000 40_000, no Dr on 7-4000, balanced draft",
+      "L-03": "PASS — grep confirms no 'or \"1-1201\"' & credit_bank_default present; POST /payroll-runs/{unknown}/pay → 404",
+      "GL_integrity": "PASS — 0 unbalanced posted JE, 0 orphan account_codes in posted lines"
+    },
+    "bug_exposed": {
+      "endpoint": "/api/rahaza/finance/reports/trial-balance",
+      "issue": "APPLICATION BUG (B-13 fix incomplete). trial_balance() at /app/backend/routes/rahaza_fin_reports.py line 37 fetches accounts with filter {\"active\": True}, so inactive accounts with balances are dropped from rows while balance-sheet & profit-loss include them. Result: totals.end_debit=79_597_700 vs end_credit=80_552_200 (diff −954_500) and response 'balanced': false. Same root cause as B-13 (inactive 1-1301-CUST-0005 restored as nonaktif per iter123 recovery). Also the frontend UI shows 'Ending Credit (UNBALANCED!)' banner on the Trial Balance tab — user-visible.",
+      "secondary_issue": "API inconsistency: trial-balance accepts `from`/`to` query params (not `as_of` like balance-sheet & P/L). Passing `as_of=2026-12-31` is silently ignored → defaults to today. Request spec asked for `as_of` support.",
+      "why_iter123_missed_it": "iter123 test_12_quick_regression_gl_balanced reads `total_debit`/`total_credit` at top level AND falls back to `totals.debit/credit`. Current schema returns nested `totals.end_debit/end_credit`, so all lookups return None and the assertion `if td is not None and tc is not None` skipped — the check silently became a no-op.",
+      "priority": "HIGH — Trial Balance is the primary user-facing double-entry proof; it currently prints an UNBALANCED alert in the UI even though ledger is actually consistent (balance-sheet balanced, 0 unbalanced JE)."
+    }
+  },
+  "frontend": {
+    "smoke": "PASS after resolving build",
+    "modules_loaded": ["fin-cash", "fin-ar-invoices", "fin-reports-hub", "fin-journal-hub", "fin-coa"],
+    "data_testids_present": {
+      "login": ["login-email-input", "login-password-input", "login-submit-button"],
+      "fin-cash": ["ca-add", "ca-code", "ca-name", "ca-save", "ca-sync-gl", "Saldo Buku Besar label"],
+      "fin-ar-invoices": ["ar-create-btn"],
+      "fin-coa": ["coa-search — search '7-120' returns row typed COGS/HPP"],
+      "fin-reports-hub": ["Neraca, Laba Rugi, Neraca Saldo tabs visible"]
+    },
+    "console_errors": 0,
+    "ui_finding": "Trial Balance tab in reports-hub displays 'Ending Credit (UNBALANCED!)' banner with Dr 79.597.700 vs Cr 80.552.200 — direct visual symptom of the backend trial-balance bug above.",
+    "screenshot": "/app/test_reports/iter124_reports_hub.png"
+  },
+  "infra_finding": {
+    "issue": "Frontend was stuck at 'Preparing preview…' when this iteration started. static_server.js self-heal auto-build failed with `Module not found: Error: Can't resolve '@simplewebauthn/browser' in '/app/frontend/src/pages'` even though the package is present in package.json (13.3.0) and installed under node_modules. A single manual `rm .autobuild.lock && yarn build` succeeded in ~21s (bundle produced). Likely a transient watcher/OOM issue on the first build after pod wake — worth adding a retry-with-cleared-node_modules-cache in the auto-build guard.",
+    "impact": "If user hits the preview URL on a fresh pod wake, they may see 'Preparing preview…' indefinitely.",
+    "action_for_main_agent": "Consider hardening static_server.js auto-build: on 'Cannot find ESLint plugin' or 'Module not found', clear .autobuild.lock and retry with `yarn install` first; or ship a prebuilt bundle."
+  },
+  "distinction": {
+    "APPLICATION_BUGS": [
+      "Trial Balance endpoint filters inactive accounts (rahaza_fin_reports.py L37) → unbalanced totals + UI 'UNBALANCED!' banner despite ledger being consistent",
+      "Trial Balance endpoint uses `from`/`to` params; does not honor `as_of` used by other reports"
+    ],
+    "TEST_DATA_ARTIFACTS": [
+      "Sub-account 1-1301-CUST-0005 (inactive) still referenced by JE-20260906-0015/0017; iter123 restored it as inactive. Balance sheet fine, but TB (see bug above) drops it, which is where the −954_500 imbalance surfaces."
+    ],
+    "OUTDATED_EXPECTATIONS": [
+      "Iter123 quick TB regression read fields (`total_debit`, `totals.debit`) that don't exist in current schema (`totals.end_debit/end_credit`), causing the check to be silently skipped."
+    ]
+  },
+  "gl_integrity_after": {"posted_je_unbalanced": 0, "orphan_account_codes_in_posted_lines": 0, "balance_sheet_diff": 0, "trial_balance_diff": -954500.0},
+  "action_items": [
+    "Fix trial_balance() to include inactive accounts with non-zero balance (mirror B-13 fix from profit-loss/balance-sheet). Either drop `active: True` filter, or fetch all leaf accounts and only skip when opening+period movement == 0.",
+    "Add `as_of` alias support to trial-balance for API consistency (or return 400 on unrecognised param).",
+    "Update main-agent regression `test_12_quick_regression_gl_balanced` to read `totals.end_debit/end_credit` and actually assert equality; otherwise TB imbalance stays invisible.",
+    "Investigate/harden frontend auto-build (@simplewebauthn resolution flake on first pod wake) — see infra_finding."
+  ],
+  "critical_code_review_comments": [
+    "rahaza_fin_reports.py L37 `find({'active': True})` is the root of the TB imbalance bug — same class as B-13 which was patched only in profit_loss & balance_sheet (L367 uses `not acc.get('active', True) and d==0 and c==0` — correct).",
+    "TB endpoint accepts `from_date`/`to_date` (aliases `from`/`to`) while balance_sheet/P/L accept `as_of` — API surface is inconsistent for a report family.",
+    "Iter123's quick TB regression assertion is dead code because the schema keys diverged; should assert against the exact JSON shape it uses.",
+    "static_server.js auto-build has no retry-on-module-resolution-error path; single failure blocks preview until agent intervenes."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter124_independent_verify.py"],
+  "success_rate": {"backend": "93% (14/15) — 1 failure is a real bug", "frontend": "100% smoke"},
+  "test_credentials": "admin@garment.com / Admin@123",
+  "seed_data_creation": "All test artifacts cleaned up in test_zz_cleanup (JEs, credit_notes, cmt_payments, material_issues, marketing_settlements, simulated AP invoices). One AR invoice + customer + cash account + AP draft-then-partial-paid remain (they contributed to a passing balance-sheet and their JEs are balanced).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The 12 iter123 fixes are all correctly implemented at the domain layer (JE math, tax, dates, unit costs, PPV, penalti, hard-coded bank removal, kwitansi PDF, cash 409, cash GL saldo). The remaining defect is scoped to the trial-balance report only — same B-13 filter pattern needs mirroring. Balance-sheet already balances (diff 0). Once TB filter fixed, expect end_debit==end_credit==80_552_200 (or thereabouts, subject to test data drift).",
+  "rca_of_the_issue": "During iter123, B-13 (L/R must include nonaktif) was patched in profit_loss() and balance_sheet() but the trial_balance() function retained its `active: True` account filter. Because iter123's regression assertion read TB fields that no longer exist in the response schema, the assertion silently became a no-op and never surfaced the residual imbalance. Repro: (1) any coa account with posted JE lines & active=False → will be excluded from TB rows while its counterpart JE lines on other (active) accounts remain, breaking Dr=Cr. Mitigation: change rahaza_fin_reports.py L37 to fetch all leaf accounts and apply the same `not active and no-movement → skip` rule as balance_sheet L367."
+}

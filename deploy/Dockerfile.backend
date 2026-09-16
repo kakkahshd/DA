@@ -1,0 +1,33 @@
+# DA ERP backend — Python 3.11 (sama dengan lingkungan pengembangan).
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Asia/Jakarta
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl build-essential libffi-dev tzdata \
+    && (ARCH="$(dpkg --print-architecture)"; if [ "$ARCH" = "amd64" ]; then \
+         curl -fsSL -o /tmp/mt.deb https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian12-x86_64-100.12.0.deb \
+         && apt-get install -y /tmp/mt.deb && rm -f /tmp/mt.deb || echo "mongodb-database-tools dilewati (backup dari UI nonaktif; backup harian tetap jalan via cron host)"; fi) \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/backend
+
+COPY backend/requirements.txt .
+# emergentintegrations & litellm hanya ada di lingkungan Emergent → DIBUANG. Sisanya dipasang;
+# bila pemasangan massal gagal karena satu pin, jatuh ke pemasangan per paket (yang gagal dilewati).
+RUN grep -viE '^(emergentintegrations|litellm)' requirements.txt > /tmp/req.txt \
+    && (pip install --no-cache-dir -r /tmp/req.txt \
+        || (echo "!! pemasangan massal gagal → per paket"; \
+            while read -r p; do [ -z "$p" ] && continue; pip install --no-cache-dir "$p" || echo "SKIP: $p"; done < /tmp/req.txt))
+RUN python -c "import fastapi, motor, uvicorn, bcrypt, jwt, pandas, openpyxl, reportlab, fpdf" \
+    && echo "dependensi inti OK"
+
+COPY deploy/emergent_stub/ /usr/local/lib/python3.11/site-packages/
+COPY backend/ .
+COPY scripts/ /app/scripts/
+RUN rm -f .env && chmod +x /app/scripts/*.sh 2>/dev/null || true; mkdir -p /app/uploads /app/backups
+
+EXPOSE 8001
+HEALTHCHECK --interval=20s --timeout=5s --start-period=180s --retries=10 \
+    CMD curl -fsS http://127.0.0.1:8001/api/health || exit 1
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--proxy-headers", "--forwarded-allow-ips=*"]

@@ -1,0 +1,47 @@
+{
+  "summary": "SMOKE test iteration 200 pada preview DAHOST setelah impor master NYATA. 7/8 pytest lulus. Semua flow UI utama termuat (login → Pilih Portal → Portal Produksi → Administrasi Sistem → Master Produk / Lokasi Kerja). Endpoint seed demo dilindungi (403). Satu ketidakcocokan angka: /api/rahaza/employees mengembalikan total=25 (bukan 50 seperti Runbook & spec review).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/rahaza/employees",
+        "issue": "Total karyawan = 25, seharusnya 50 sesuai GO_LIVE_RUNBOOK (02_KARYAWAN 50). Verifikasi langsung MongoDB collection `rahaza_employees` juga menghasilkan 25 dokumen — bukan efek paginasi (mencoba limit=500, include_inactive=true, is_active=false semua menghasilkan 25). Kemungkinan besar impor sheet 02_KARYAWAN dari MASTER_DATA_DA_GOLIVE.xlsx tidak lengkap / setengah baris di-skip. Perlu diperiksa: (a) apakah workbook aktif punya 50 baris valid pada 02_KARYAWAN; (b) apakah scripts/import_master_template.py memfilter baris dengan status/kolom tertentu; (c) apakah karyawan hanya menyimpan yang punya `nik` unik / status aktif. Jalankan `python3 scripts/import_master_template.py private/golive/MASTER_DATA_DA_GOLIVE.xlsx --apply` lalu cek log warn/err untuk sheet 02_KARYAWAN.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "smoke_results": {
+    "1_health": "PASS — /api/health status ok, db connected",
+    "2_admin_login": "PASS — token diperoleh; UI menampilkan halaman 'Pilih Portal' dengan kartu Portal Manajemen, Administrasi Sistem, Portal Produksi, Portal Cutting, Portal Pengadaan, Portal Gudang, Portal Aksesoris, Portal Keuangan, Portal Penjualan, Portal SDM/HRIS",
+    "3_master_data": "PARTIAL — locations=11 ✓ (kode GD-L1-RAK, GD-L1-ACC, GD-L1-QC, GD-L2-CUT, GD-L2 semua ada), models=104 ✓, users=27 ✓, employees=25 ✗ (harapan 50)",
+    "4_import_user_first_login": "PASS — POST /api/auth/login tanti.n@dewiaditya.id / Dewi@123 → 200 dan /api/auth/me mengembalikan must_change_password=true (password TIDAK diganti)",
+    "5_portal_produksi_ui": "PASS — Portal Produksi (#production-dashboard) termuat tanpa error blank/500, dashboard menampilkan '43 material di bawah stok minimum', '7/30/90 hari', PO Berjalan/Di Vendor CMT dll. Administrasi Sistem (#mgmt-access-hub) juga termuat (27 user terlihat). UI 'Lokasi Kerja' di Portal Produksi > Master Data menunjukkan LOKASI=11 (konsisten dengan API).",
+    "6_seed_forbidden": "PASS — POST /api/seed/maklon-full dengan token admin → 403 (ALLOW_DEMO_SEED=false efektif)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_smoke_iteration_200.py",
+    "/app/test_reports/pytest/iter200_smoke.xml"
+  ],
+  "action_items": [
+    "Selidiki mengapa /api/rahaza/employees hanya berisi 25 karyawan alih-alih 50: cek sheet 02_KARYAWAN di private/golive/MASTER_DATA_DA_GOLIVE.xlsx (jumlah baris valid) dan log ekspor `scripts/import_master_template.py` untuk baris yang di-skip/error, atau filter is_active yang menyembunyikan setengah karyawan. Bandingkan langsung dengan DB: `db.rahaza_employees.count_documents({})` = 25."
+  ],
+  "critical_code_review_comments": [
+    "Endpoint /api/rahaza/employees mendukung pagination dengan default limit=50, tapi field `total` juga 25 — konsisten dengan storage. Bukan bug endpoint, tapi bug data/import.",
+    "Health, auth, dan role-based seed gate (ALLOW_DEMO_SEED) bekerja sesuai spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_smoke_iteration_200.py"
+  ],
+  "success_rate": {"backend": "87.5% (7/8)", "frontend": "100% (semua flow smoke termuat tanpa error)"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin); tanti.n@dewiaditya.id / Dewi@123 (must_change_password=true — TIDAK diganti sesuai instruksi)",
+  "seed_data_creation": "Tidak ada seed data baru dibuat. Tidak ada data master dihapus/diubah.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Preview URL https://dahost-staging.preview.emergentagent.com; frontend static build (jangan yarn start). File pytest smoke di /app/backend/tests/test_smoke_iteration_200.py; jalankan `pytest backend/tests/test_smoke_iteration_200.py -v` untuk regresi cepat. Master Lokasi UI tampil via Portal Produksi > Master Data > Lokasi Kerja (kartu 'LOKASI 11'). Isu tersisa: employees=25 vs runbook 50.",
+  "rca of the issue": "Runbook GO_LIVE_RUNBOOK.md baris 51 menyebutkan '02_KARYAWAN 50'. Namun MongoDB `rahaza_employees` hanya berisi 25 dokumen (dicek via pymongo langsung + endpoint dengan limit=500). Semua flag paginasi/filter yang dicoba (limit=500, include_inactive=true, is_active=false) menghasilkan total=25. Kemungkinan penyebab: (a) sheet 02_KARYAWAN pada workbook GOLIVE hanya berisi ~25 baris valid — sisanya dianggap invalid (mis. NIK ternyata 16 digit sehingga error 'kode_karyawan berisi 16 digit ...' di scripts/import_master_template.py line 200-201); (b) baris dengan status non-aktif / kolom kosong di-skip pada tahap `check_required`. Mitigasi: jalankan ulang `python3 scripts/import_master_template.py private/golive/MASTER_DATA_DA_GOLIVE.xlsx --apply` dan tinjau baris ERROR/WARN sheet 02_KARYAWAN, atau bandingkan jumlah baris workbook."
+}

@@ -1,0 +1,33 @@
+{
+  "iteration": 123,
+  "date": "2026-09-07",
+  "scope": "Bukti eksekusi 12 perbaikan finance iter 123 + regresi penuh finance iter96-122 + integritas GL",
+  "test_file": "/app/backend/tests/test_iter123_finance_fixes.py",
+  "result": {"passed": 13, "failed": 0, "skipped": 0},
+  "items": {
+    "cash_account_409": "PASS — kode rekening ganda ditolak 409",
+    "B-11": "PASS — bayar AP draft → 400, invoice tetap draft tanpa GL; setelah send → 200 partial_paid",
+    "B-13": "PASS — akun 6-2900 dinonaktifkan tetap tampil di L/R",
+    "H-10": "PASS — CN 111.000 (PPN 11.000): Dr 4-1200 100.000 + Dr 2-1400 11.000 / Cr AR 111.000",
+    "M-04/B-09": "PASS — penalti 50.000 memotong biaya & hutang (950.000), tanggal JE = invoice_date 2026-08-15, net_amount diperbarui",
+    "M-03": "PASS — 7-1xx bertipe COGS dan tampil di grup HPP L/R",
+    "B-10": "PASS — GRNI 100.000 + PPV 5-1900 5.000 / Cr AP 105.000",
+    "M-05": "PASS — potongan lain 30.000 + penyesuaian −10.000 → Dr 6-2900 40.000; subsidi 20.000 → Cr 7-4000",
+    "L-03": "PASS — tidak ada hard-code 1-1201, default dari profil payroll_payment",
+    "B-12": "PASS — JE MI memakai unit_cost_applied (bukan master); MI tanpa applied distempel",
+    "kwitansi_pdf": "PASS — receipt.pdf 200 application/pdf memuat KWITANSI + nomor invoice; pid asing 404",
+    "regresi_cepat": "PASS — TB seimbang, neraca 200, saldo kas GL = 5.300.000 diff 0, 0 JE posted tak seimbang"
+  },
+  "regression_full": {
+    "command": "pytest tests/test_iter9[6-9]*.py tests/test_iter1[0-2][0-9]*.py",
+    "before_repair": {"passed": 211, "failed": 44, "errors": 15, "skipped": 6},
+    "root_causes": {
+      "neraca_tidak_seimbang_diff_-954500": "DATA, bukan kode: sub-akun 1-1301-CUST-0005 dihapus langsung di DB oleh cleanup sesi sebelumnya sementara 2 JE (JE-20260906-0015/0017) masih memakainya. Endpoint DELETE /coa/accounts sudah menolak (soft-disable) — jadi penghapusan tidak lewat aplikasi. Dipulihkan sebagai akun nonaktif → neraca seimbang diff 0. Menyebabkan 8 tes balance-sheet gagal.",
+      "tes_usang_field_balance": "iter112 & iter117_sales_cron membaca field `balance` langsung dari dokumen Mongo rahaza_cash_accounts — field itu SENGAJA dihapus di iter 122 (saldo = GL). Tes yang usang, aplikasi benar.",
+      "tes_bergantung_data_seed": "iter99/100 (settlement Juli/Agustus), iter101 (bank txn/sesi rekonsiliasi), iter102/103/115 (PO demo sudah terkirim penuh), iter116 (backfill), iter119 fix4 (8 kasbon sisa uji lama menyerap gaji lebih dulu — perilaku cap iter 120 benar).",
+      "infra_tes": "iter105/106 butuh /tmp/ta.tok (token testing agent); iter117_review tidak load .env (BASE kosong) — diperbaiki; iter122 test_3 get_event_loop di Py3.11 — diperbaiki (asyncio.run); iter117 cron 401 = WEBHOOK_CRON_SECRET env tes."
+    },
+    "app_bugs_found": 0
+  },
+  "gl_integrity_after": {"posted_je": 50, "unbalanced_posted_je": 0, "trial_balance": "Dr = Cr", "balance_sheet_diff": 0}
+}

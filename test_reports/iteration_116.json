@@ -1,0 +1,27 @@
+{
+  "summary": "Iter 116 (Backfill WIP→FG + Laporan Nilai Persediaan FG M-01) PASS end-to-end. Pytest 12/12 hijau (test_iter116 + test_iter115). API scenarios (dry_run, run idempoten, gudang 403, maklon skipped, as_of, balance-sheet balanced) telah tercakup didalam test_iter116_fg_valuation_backfill.py. UI di ?module=fin-reports-hub tab 'Nilai Persediaan FG' menampilkan seluruh testid yang diminta (empty state, KPI, status, asof, export, backfill card+preview+run). Semua data uji dibersihkan; JE count final = 1 (sebelum=sesudah), fg_cost_layers=0, cmt_receipts=0, tidak ada journal_lines yatim.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iter116_fg_valuation_backfill.py", "/app/backend/tests/test_iter115_internal_handover.py"],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@garment.com/Admin@123 (superadmin), gudang@dewiaditya.id/Dewi@123 (403 verified)",
+  "seed_data_creation": "Tes membuat data sintetis (PO internal+maklon, material FG, 3 cmt_receipts, 4 fg_cost_layers, 1 rahaza_material_stock) untuk pytest & UI, semuanya di-cleanup termasuk JE yang diposting. Verifikasi akhir: DB kembali ke baseline (JE=1, layers=0, receipts=0, no orphans).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 116 clean baseline: rahaza_journal_entries=1, fg_cost_layers=0, cmt_receipts=0. Endpoint baru: POST /api/prod/cmt-receipts/backfill-wip-fg?dry_run=true|false (finance/admin/superadmin), GET /api/rahaza/finance/reports/fg-inventory-valuation?as_of=YYYY-MM-DD. UI tab: fin-reports-hub → 'Nilai Persediaan FG' (data-testid rahaza-fgval-page).",
+  "verifications": {
+    "pytest_12_pass": true,
+    "je_count_before_after_equal_1": true,
+    "no_orphan_journal_lines": true,
+    "gudang_forbidden_403": true,
+    "maklon_skipped": true,
+    "idempotent_second_run": true,
+    "asof_filter_works": true,
+    "balance_sheet_balanced": true,
+    "csv_export_button_enabled": true,
+    "regression_endpoints_200": ["trial-balance", "balance-sheet", "profit-loss", "cmt-receipts/summary"]
+  }
+}

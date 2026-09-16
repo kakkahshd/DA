@@ -1,0 +1,26 @@
+{
+  "summary": "Iter 115 (PO internal = handover-only + WIP→FG on CMT receipt + H-07 removed) fully verified. Backend pytest 18/18 hijau (test_iter115_internal_handover + test_iter114_h07_m09_alerts + test_iter113_period_guard). Supplemental QA (qa_iter115_api.py) 6/6 hijau: double dispatch to same internal PO stays handover-only (stok & JE count invariants preserved, GET returns items), maklon regresi 400 dgn error 'source_receipt_ids', H-07 POST & GET keduanya 404/405, alerts + year-end preview 200, balance-sheet balanced true, tidak ada orphan journal_lines. UI: panel data-testid=internal-dispatch-info tampil saat pilih PO internal (PO-INT-DEMO-2), memuat copy 'serah terima hasil produksi ke gudang stok sendiri' & 'HPP tidak dibukukan', layout form utuh.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter115_internal_handover.py",
+    "/app/backend/tests/qa_iter115_api.py",
+    "/app/test_reports/pytest/iter115_run.xml",
+    "/app/test_reports/pytest/qa_iter115.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "buyer_shipment.py branch handover-only cleanly bypasses fg precheck/stok/COGS/AR untuk PO internal — response konsisten (skipped keys + handover_mode).",
+    "post_wip_to_fg_on_cmt_receipt idempoten via marker gl_je_id di fg_cost_layers + wip_fg_je_id di cmt_receipts; post_wip_to_fg_on_job_complete filter gl_je_id None mencegah double-post — pola solid.",
+    "H-07 removal bersih (router dropped) — GET & POST keduanya 404/405 sesuai kontrak.",
+    "UI copy panel internal-dispatch-info sudah selaras dengan keputusan bisnis (marketplace/penjualan langsung) tanpa merusak layout."
+  ],
+  "updated_files": ["/app/backend/tests/qa_iter115_api.py"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123",
+  "seed_data_creation": "Sintetis di test_iter115 (fg_cost_layers, cmt_receipts, JE) & qa_iter115 (buyer_shipments dispatch). Semua auto-cleanup (JE count sebelum==sesudah dikonfirmasi lewat invariant assertion & orphan_journal_lines=0).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 115 landed. qa_iter115_api.py bisa dipakai sebagai regresi cepat (butuh seed PO-INT-DEMO-2 dan PO maklon aktif). Container date 2026-09-05.",
+  "rca of the issue": "N/A — no bugs found."
+}

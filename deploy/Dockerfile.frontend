@@ -1,0 +1,22 @@
+# DA ERP frontend — build CRA/craco lalu sajikan statis lewat nginx (SPA fallback ke index.html).
+FROM node:20-alpine AS build
+WORKDIR /app/frontend
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL \
+    GENERATE_SOURCEMAP=false \
+    DISABLE_ESLINT_PLUGIN=true \
+    CI=false
+COPY frontend/package.json ./
+# @emergentbase/visual-edits = alat editor Emergent (hanya dev server) → dibuang agar tidak menarik aset eksternal.
+RUN node -e "const f='package.json',p=require('./'+f);delete (p.devDependencies||{})['@emergentbase/visual-edits'];require('fs').writeFileSync(f,JSON.stringify(p,null,2))" \
+    && yarn install --network-timeout 600000
+COPY frontend/ .
+RUN rm -f .env \
+    && node -e "const f='package.json',p=require('./'+f);delete (p.devDependencies||{})['@emergentbase/visual-edits'];require('fs').writeFileSync(f,JSON.stringify(p,null,2))" \
+    && NODE_OPTIONS=--max-old-space-size=2560 npx craco build \
+    && test -f build/index.html
+
+FROM nginx:1.27-alpine
+COPY deploy/nginx-frontend.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/frontend/build /usr/share/nginx/html
+EXPOSE 80

@@ -1,0 +1,27 @@
+{
+  "summary": "QA iter206 — Sinkronisasi CoA (4-digit Excel) dengan Kas & Bank, Auto Akun subledger, Peta Akun Channel, Posting Profile CMT AP. Backend pytest 11/11 PASS. Frontend UI (hash routes) semua data-testid render & aktif. Idempotensi sync-masters terverifikasi (run ke-2 nol perubahan). Semua residu QA (rekening & CoA) sudah dibersihkan dari Mongo.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter206_coa_sync.py",
+    "/app/test_reports/pytest/iter206.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DELETE /api/rahaza/cash-accounts/{id} adalah soft-delete (active=false) — dokumen tetap ada di Mongo. Perilaku ini benar untuk domain (untuk mempertahankan riwayat mutasi), tetapi test harus tahu: cleanup Mongo langsung diperlukan untuk artefak QA. Sudah didokumentasikan di test.",
+    "POST /api/rahaza/finance/sync-masters idempoten dengan benar: run ke-2 menghasilkan cash_accounts_created=[], stores.revenue_created=[], subledgers_created semua 0 (verified via pytest + UI toast 'Sinkron selesai · 0 rekening baru · 0 jurnal saldo awal · 0 gagal').",
+    "Auto Akun settings backend memuat maklon_client (parent 1-1305) & cmt_vendor (collection vendor_partners, parent 2-1110) sesuai spesifikasi.",
+    "20 cash accounts semua tertaut gl_account_code (1-1101, 1-1102, 1-1201..1-1202, 1-1211..1-1215, 1-1219, 1-1221..1-1225, 1-1251..1-1255) dengan balance_source='gl'. gl-candidates endpoint return kosong (semua akun CoA cash/bank sudah tertaut).",
+    "Validasi POST /api/rahaza/cash-accounts benar: gl_account_code sudah terpakai → 409; gl bukan akun kas/bank/dompet (e.g. 4-1100) → 400; type=bank tanpa gl → auto-create di parent 1-1200; type=cash tanpa gl → auto-create di parent 1-1100.",
+    "Channel GL mapping: 7 baris aktif (SHP-01..04 & TTK-01..03) dengan credit_revenue 4-11xx & debit_ar 1-1303-<kode>.",
+    "Posting profile cmt_ap_invoice mapping.credit_ap = '2-1110' (Hutang Vendor CMT) — konsisten dengan spesifikasi."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter206_coa_sync.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123",
+  "seed_data_creation": "Semua artefak QA (rekening QA-F49-NEW, QA-F49-CASH dan akun CoA turunan 1-1200-*/1-1100-* dari uji) sudah dihapus dari Mongo. DB tetap 0 jurnal.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iter206_coa_sync.py mencakup semua flow sinkronisasi CoA→Kas&Bank, Auto Akun (vendor_partners/2-1110 & maklon_client/1-1305), 7 toko revenue+AR sub-ledger, channel GL, posting profile CMT AP. Rate limit login 10/60s per IP → satu token modul-scope. Cleanup Mongo via pymongo langsung karena DELETE cash-accounts hanya soft-delete.",
+  "rca of the issue": "Tidak ada bug. Semua fitur sinkronisasi CoA berperilaku sesuai spesifikasi."
+}

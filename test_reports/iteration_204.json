@@ -1,0 +1,48 @@
+{
+  "summary": "Iter 204 — Verifikasi keputusan owner 2026-09-12: (BE) CoA tunggal 4-digit `X-XXXX` (201 akun aktif, 1 nonaktif) tanpa akun 3-digit; verify_coa_unified.py VERDICT HIJAU (K1-K9); jurnal manual seimbang berhasil POST + void; akun HEADER 1-1200 ditolak; kode legacy 3-digit `1-110` ditolak; posting profiles & channel-gl-mapping semuanya menunjuk akun 4-digit non-header; 104 model semua ber-category_id dengan 7 kategori target hadir (Top, One set, Inner, Tunik, Dress, Blouse, Celana); saldo_awal_golive.py template menghasilkan 6 sheet yang benar dan import (tanpa --apply) melaporkan 'Semua saldo 0'. (FE) Master Akuntansi hub termuat; tab Bagan Akun menampilkan 201 akun format X-XXXX termasuk 1-1211 Bank BCA – CV Dekka Karya Utama, 1-1251, 4-1111, 5-4200, 2-1110; TIDAK ada kode 3-digit; tab Profil Posting terbuka tanpa error. Data uji dibersihkan (2 jurnal UJI QA coa dihapus dari MongoDB).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_results": {
+    "auth_login": "PASS — admin@garment.com/Admin@123 → token",
+    "verify_coa_unified.py": "PASS — VERDICT HIJAU · K1 (201 aktif, 1 nonaktif, semua X-XXXX) · K2 (96 akun khas DA) · K3-K9 semua terjaga",
+    "GET /api/rahaza/coa/accounts": "PASS — semua akun aktif regex ^\\d-\\d{4}$, tidak ada 3-digit; 1-1211/1-1251/4-1111/5-4200/2-1110 ada dengan nama benar",
+    "POST /api/rahaza/journals (balanced 1-1101 vs 3-1000)": "PASS — 200/201, posted",
+    "POST journal ke header 1-1200": "PASS — ditolak (>=400)",
+    "POST journal ke legacy 1-110": "PASS — ditolak (>=400)",
+    "POST /api/rahaza/journals/{id}/void": "PASS — jurnal uji berhasil di-void",
+    "cleanup MongoDB rahaza_journal_entries memo='UJI QA coa'": "PASS — 2 entries dihapus, tidak ada lines terkait",
+    "GET /api/rahaza/posting-profiles": "PASS — semua kode akun 4-digit, ada di CoA aktif, bukan header",
+    "GET /api/rahaza/channel-gl-mapping": "PASS — tidak ada kode 3-digit",
+    "GET /api/rahaza/models": "PASS — 104 model, semua category_id terisi",
+    "GET /api/rahaza/product-categories": "PASS — memuat Top, One set, Inner, Tunik, Dress, Blouse, Celana",
+    "scripts/saldo_awal_golive.py template": "PASS — /tmp/qa_saldo.xlsx sheet: PETUNJUK, SALDO_AWAL, PIUTANG_PELANGGAN, PIUTANG_MAKLON, HUTANG_SUPPLIER, HUTANG_VENDOR_CMT",
+    "scripts/saldo_awal_golive.py import --date 2026-10-01": "PASS — 'Semua saldo 0 — tidak ada jurnal pembuka'; --apply TIDAK dijalankan"
+  },
+  "frontend_results": {
+    "login_admin_ui": "PASS",
+    "fin-accounting-master-hub": "PASS — hub termuat, 7 tab (Bagan Akun/Profil Posting/Auto Akun/Pemetaan GL/Kategori Expense/Periode/Setup)",
+    "tab_bagan_akun_flat": "PASS — Total 201 akun; semua kode format X-XXXX; 0 kode 3-digit; contoh: 1-1101 Kas Kecil, 1-1201 Bank BCA, 1-1210 Bank BCA – Entitas & Perorangan (group), 1-1211 Bank BCA – CV Dekka Karya Utama, 1-1212 CV Dzaki, 1-1213 CV Sukma Mitra, 1-1214 Aditya Sulistyo DW (CMT), 1-1215 Dewi Ratnasari; 1-1251, 4-1111, 5-4200, 2-1110 ada",
+    "tab_profil_posting": "PASS — terbuka tanpa error; menampilkan section ACCRUAL/ACCRUAL_REVERSAL/AP_INVOICE dst dengan combobox akun 4-digit (6-2900, 2-1600, 1-1401, 2-1150, 5-1900, 1-1501, 2-1100)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_coa_unified_iter204.py",
+    "/app/test_reports/pytest/iter204.xml"
+  ],
+  "pytest_results": "11 passed in 2.19s (test_coa_unified_iter204.py)",
+  "action_items": [],
+  "critical_code_review_comments": [
+    "verify_coa_unified.py mencakup 9 invarian yang tepat menutup keputusan owner 2026-09-12 (skema tunggal 4-digit, akun khas DA, hierarki, sinkron auto GL, saldo normal, dedup nama per induk).",
+    "rahaza_journals._validate_lines dengan benar menolak akun header (1-1200) dan kode legacy 3-digit (1-110) dengan HTTP 400.",
+    "posting-profiles + channel-gl-mapping tidak lagi menyisakan referensi 3-digit — sinkron dengan CoA."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_coa_unified_iter204.py (baru)"
+  ],
+  "success_rate": {"backend": "100% (11/11 pytest + verify script + saldo awal)", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin) — dari /app/memory/test_credentials.md",
+  "seed_data_creation": "Tidak ada data master baru. 2 jurnal uji manual dibuat lalu di-void + dihapus dari MongoDB (rahaza_journal_entries memo 'UJI QA coa'). /tmp/qa_saldo.xlsx dihasilkan sebagai template (tidak di-apply).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Endpoint CoA yang dipakai UI: GET /api/rahaza/coa/accounts (BUKAN /api/rahaza/coa). Router prefix /api/rahaza/coa dengan sub-route /accounts, /tree. CoA saat ini 201 aktif + 1 nonaktif, semua 4-digit. Kode khas: 1-1101 Kas Kecil, 1-1201 Bank BCA induk, 1-1210 group entitas, 1-1211..1-1215 bank per entitas CMT, 1-1251 GoPay, 4-1111 Penjualan Shopee Grosirhijabsragen, 5-4200 Biaya Vendor CMT Maklon, 2-1110 Hutang Vendor CMT (Termin), 3-1000 Modal Disetor. Jurnal test memakai 1-1101/3-1000. Header 1-1200 & legacy 1-110 diblokir oleh _validate_lines. verify_coa_unified.py K1-K9 hijau. Saldo awal template menghasilkan 6 sheet dan --apply harus TIDAK dijalankan.",
+  "rca of the issue": "Tidak ada bug. Semua invarian keputusan owner 2026-09-12 terverifikasi hijau."
+}

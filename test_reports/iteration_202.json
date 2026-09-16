@@ -1,0 +1,40 @@
+{
+  "summary": "Iter 202 — Verifikasi kebijakan BOM POTONGAN (owner 2026-09-12) & gate INV-F46. Semua invarian terpenuhi. verify_bom_potongan_hpp.py VERDICT HIJAU (P1-P8, 472 BOM · 472 baris potongan · 0 baris kain; skenario owner: 150 yard Rp3.000.000 → 150 potongan → Rp20.000/potongan → HPP bahan Rp20.000; artefak uji dibersihkan sendiri). 6/6 pytest backend tambahan lulus. UI Master Produk → tab BOM (data-testid='tab-bom') model DA-1101 baris ALLSIZE menampilkan '1 pcs CUT-DA-1101-MHG-ALLSIZE' dengan data-testid='bom-panel-CUT-DA-1101-MHG-ALLSIZE' dan kolom Material '1 material (potongan · 0 aksesoris)'; subjudul menyebut '1 pcs potongan'. Data master tidak diubah; tidak ada seed baru dibuat.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_results": {
+    "gate_verify_bom_potongan_hpp": "PASS — VERDICT HIJAU. P1 472 BOM aktif = 472 baris potongan, 0 baris kain. P2 472 master potongan (kode CUT-<MODEL>-<WARNA>-<UKURAN>, menunjuk kain asal). P3 DA-1101 ALLSIZE BRG → CUT-DA-1101-BRG-ALLSIZE, HPP bahan Rp0 + gap panel_unvalued. P4 CUT-2026-0017 auto-link ke CUT-DA-1101-BRG-ALLSIZE. P5 150 yard Rp3.000.000 → 150 potongan; unit_cost=20.000 (status=valued); stok kain -150 & potongan +150. P6 HPP bahan DA-1101 ALLSIZE = Rp20.000 (1 pcs × 20.000). P7 rencana cutting manual (BOM potongan) tanpa gap kain-tidak-di-BOM. P8 artefak uji bersih (progress=1, order=1, mi=1, gr=1, stok=2, ledger=3, movements=2, cost_history=2, mat=1, gl=1).",
+    "test_all_active_boms_use_one_cut_panel": "PASS — 472/472 BOM aktif punya tepat 1 baris is_cut_panel=true qty=1 unit='pcs' code diawali CUT-, tidak ada baris material_type='fabric' non-cut.",
+    "test_master_cut_panels_472": "PASS — rahaza_materials{is_cut_panel:true} = 472 dengan model_id/color_code/size_code/source_material_code terisi.",
+    "test_costing_model_da1101_gap_panel_unvalued": "PASS — GET /api/costing/models/{DA-1101} → 200, gaps memuat code 'panel_unvalued' dengan pesan menyebut cutting/potongan; biaya bahan ALLSIZE = 0.",
+    "test_rahaza_bom_matrix_da1101": "PASS — GET /api/rahaza/models/{DA-1101}/bom → matrix baris ALLSIZE panel_code='CUT-DA-1101-…-ALLSIZE', panel_source_fabric diawali 'KN-', total_material_kg_per_pcs=0.",
+    "test_cutting_bom_requirement_da1101": "PASS — GET /api/cutting/bom-requirement?model_id=<DA-1101>&size_id=<ALLSIZE>&qty_pcs=10 → 200, has_bom=true, plan_manual=true, panel.code diawali CUT-, tidak ada gap 'bom_without_fabric'/'input_not_in_bom'.",
+    "test_rahaza_bom_get_and_put_roundtrip": "PASS — GET /api/rahaza/boms/{id} materials[0].is_cut_panel=true & source_material_code terisi; PUT identik → 200; GET ulang: is_cut_panel masih true (penanda tidak hilang saat disunting)."
+  },
+  "frontend_results": {
+    "login_admin": "PASS — admin@garment.com / Admin@123 berhasil login (UI dashboard termuat).",
+    "product_hub_bom_tab": "PASS — #prod-master-product-hub → klik data-testid='tab-bom' membuka Bill of Materials (BOM) dengan subjudul: 'Resep per model + ukuran + warna: 1 pcs potongan (biaya = kain roll yang dipotong ÷ pcs jadi, dari Portal Cutting) + aksesoris. Bukan lagi kg kain per pcs.' dan 'Kopling BOM sehat — 472 baris material (0 aksesoris) di 472 BOM sudah tertaut ke master material'.",
+    "matrix_da1101_allsize": "PASS — baris ALLSIZE menampilkan '1 pcs CUT-DA-1101-MHG-ALLSIZE' (data-testid='bom-panel-CUT-DA-1101-MHG-ALLSIZE') dan kolom Material '1 material (potongan · 0 aksesoris)'. Ukuran lain (S/M/L/XL/XXL/STD/JMB) 'Belum ada — 0 material' (varian ukuran default belum aktif untuk model ini)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter202_bom_potongan.py",
+    "/app/test_reports/pytest/iter202.xml",
+    "/app/scripts/verify_bom_potongan_hpp.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Kebijakan BOM potongan (SSOT `backend/core/cut_panel_master.py` + `_ensure_output_material` di `backend/routes/cutting.py`) konsisten dari master → BOM → costing → cutting; gap 'panel_unvalued' dilaporkan jujur bila belum ada cutting real (compute_material_cost) — sesuai keputusan owner.",
+    "PUT /api/rahaza/boms/{id} dengan payload materials identik menjaga flag is_cut_panel & source_material_code (_clean_materials tidak menghilangkan penanda) — regressi aman.",
+    "Skrip verify_bom_potongan_hpp.py membersihkan semua koleksi yang tersentuh (progress, order, mi, gr, stok, ledger, movements, cost_history, mat, gl) — tidak meninggalkan artefak."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter202_bom_potongan.py"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest + gate INV-F46 HIJAU)", "frontend": "100%"},
+  "test_credentials": "admin@garment.com / Admin@123 (superadmin)",
+  "seed_data_creation": "Tidak ada. verify_bom_potongan_hpp.py membuat & membersihkan artefaknya sendiri (kain uji 150 yard, order cutting, progress). Data master 472 potongan & 104 model tidak diubah.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regressi cepat: (1) python3 scripts/verify_bom_potongan_hpp.py dari /app (gate INV-F46 HIJAU wajib). (2) pytest backend/tests/test_iter202_bom_potongan.py. Kunci: rahaza_boms.active=True (bukan is_active) — 472 dokumen aktif. rahaza_materials{is_cut_panel:true}=472. Model DA-1101 id UUID e3b3facd-dec1-41e4-8727-8a23844256d5. Frontend UI: #prod-master-product-hub → data-testid='tab-bom' → default terpilih DA-1101 → baris ALLSIZE data-testid='bom-panel-CUT-DA-1101-MHG-ALLSIZE'.",
+  "rca of the issue": "N/A — tidak ada bug ditemukan. Semua 8 invarian INV-F46, 6 pytest, dan alur UI BOM sesuai kebijakan owner 2026-09-12."
+}
