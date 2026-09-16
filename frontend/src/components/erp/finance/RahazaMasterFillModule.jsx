@@ -40,6 +40,7 @@ export default function RahazaMasterFillModule({ token }) {
     } finally { setBusy(false); }
   };
   const dl = () => downloadXlsx('/api/rahaza/master/fill-template', token, 'TEMPLATE_HARGA_SATUAN_REKENING_BOM.xlsx').catch((e) => toast.error(e.message));
+  const dlGap = () => downloadXlsx('/api/rahaza/master/gap-workbook', token, 'DATA_YANG_PERLU_DIISI_DA.xlsx').catch((e) => toast.error(e.message));
   const t = preview?.totals || {};
 
   return (
@@ -49,7 +50,9 @@ export default function RahazaMasterFillModule({ token }) {
       <div className="grid md:grid-cols-3 gap-4">
         <GlassCard className="p-5 space-y-3"><div className="text-[10px] uppercase text-muted-foreground font-semibold">Langkah 1</div><h3 className="font-semibold text-sm">Unduh template</h3>
           <p className="text-xs text-muted-foreground">Sheet MATERIAL (kain & aksesoris), REKENING, TOKO, BOM_AKSESORIS (satu baris per bahan per model — model tanpa aksesoris sudah ditandai), MODEL (berat gram).</p>
-          <Button onClick={dl} className="h-9 w-full" data-testid="fill-download"><Download className="w-3.5 h-3.5 mr-1.5" />Template Excel</Button></GlassCard>
+          <Button onClick={dlGap} className="h-9 w-full" data-testid="fill-download-gap"><Download className="w-3.5 h-3.5 mr-1.5" />Data yang Perlu Diisi (1 berkas)</Button>
+          <p className="text-[11px] text-muted-foreground mt-1.5">Hanya baris yang belum lengkap (harga material 0, SKU tanpa harga, BOM aksesoris, berat, stok awal, rekening, gaji, saldo awal) — kolom kuning yang diisi.</p>
+          <Button onClick={dl} variant="outline" className="h-8 w-full mt-2 text-xs" data-testid="fill-download"><Download className="w-3.5 h-3.5 mr-1.5" />Template lengkap (semua material)</Button></GlassCard>
         <GlassCard className="p-5 space-y-3"><div className="text-[10px] uppercase text-muted-foreground font-semibold">Langkah 2</div><h3 className="font-semibold text-sm">Unggah berkas terisi</h3>
           <input ref={inputRef} type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-primary/20 file:px-3 file:py-1.5 file:text-xs file:text-primary" data-testid="fill-file" />
           <p className="text-xs text-muted-foreground">Pratinjau muncul otomatis; baris kosong tidak diubah.</p></GlassCard>

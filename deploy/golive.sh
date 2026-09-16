@@ -102,7 +102,9 @@ case "${1:-}" in
     printf '\n\033[1;33mSemua data di DB %s akan DITIMPA dengan snapshot %s (dari %s).\033[0m\n' "$DST_DB" "$(basename "$FILE")" "$SRC_DB"
     read -r -p "Ketik TIMPA untuk melanjutkan: " ans
     [ "$ans" = "TIMPA" ] || { echo "Dibatalkan."; exit 1; }
-    dc exec -T mongo mongorestore --archive --gzip --drop --nsFrom="$SRC_DB.*" --nsTo="$DST_DB.*" < "$FILE"
+    docker cp "$FILE" "$(dc ps -q mongo):/tmp/dahost_snapshot.archive.gz"
+    dc exec -T mongo mongorestore --archive=/tmp/dahost_snapshot.archive.gz --gzip --drop --numParallelCollections=1 --nsFrom="$SRC_DB.*" --nsTo="$DST_DB.*"
+    dc exec -T mongo rm -f /tmp/dahost_snapshot.archive.gz
     log "Restart backend (seed startup + sinkronisasi master berjalan ulang)"
     dc restart backend
     wait_backend

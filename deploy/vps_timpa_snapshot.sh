@@ -90,7 +90,11 @@ fi
 
 # ── 5. Restore snapshot (test_database → dahost_erp) ──────────────────────────────────
 log "5. Restore snapshot → $DB_NAME"
-dc exec -T mongo mongorestore --archive --gzip --drop --nsFrom="$SRC_DB.*" --nsTo="$DB_NAME.*" < "$SNAP"
+# Dari FILE di dalam container, bukan stdin: exec -T menutup sesi saat stdin habis → indeks tidak selesai dibangun.
+docker cp "$SNAP" "$(dc ps -q mongo):/tmp/dahost_snapshot.archive.gz"
+dc exec -T mongo mongorestore --archive=/tmp/dahost_snapshot.archive.gz --gzip --drop --numParallelCollections=1 \
+  --nsFrom="$SRC_DB.*" --nsTo="$DB_NAME.*"
+dc exec -T mongo rm -f /tmp/dahost_snapshot.archive.gz
 echo "model: $(dc exec -T mongo mongosh --quiet "$DB_NAME" --eval 'print(db.rahaza_models.countDocuments()+" | varian "+db.rahaza_model_variants.countDocuments()+" | BOM "+db.rahaza_boms.countDocuments()+" | COA "+db.rahaza_coa_accounts.countDocuments()+" | toko "+db.marketing_platform_accounts.countDocuments()+" | user "+db.users.countDocuments())' | tr -d '\r')"
 
 # ── 6. Kembalikan sandi VPS (yang emailnya sama) ──────────────────────────────────────

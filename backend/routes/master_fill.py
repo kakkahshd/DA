@@ -51,6 +51,16 @@ async def fill_template(request: Request):
     return StreamingResponse(io.BytesIO(data), media_type=_XLSX, headers={"Content-Disposition": 'attachment; filename="TEMPLATE_HARGA_SATUAN_REKENING.xlsx"'})
 
 
+@router.get("/gap-workbook")
+async def gap_workbook(request: Request):
+    """Satu Excel berisi SEMUA data yang masih harus diisi (baris sudah terisi model/SKU/material/akun)."""
+    await _require_fin(request)
+    from core.gap_workbook import build_gap_workbook
+    data, _stats = await build_gap_workbook(get_db())
+    return StreamingResponse(io.BytesIO(data), media_type=_XLSX,
+                             headers={"Content-Disposition": 'attachment; filename="DATA_YANG_PERLU_DIISI_DA.xlsx"'})
+
+
 @router.post("/fill-preview")
 async def fill_preview(request: Request, file: UploadFile = File(...)):
     await _require_fin(request)

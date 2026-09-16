@@ -309,9 +309,14 @@ async def parse_fill_workbook(db, data: bytes) -> dict:
                 continue
             if berat > 0 and abs(berat - float(models[mcode].get("weight_gram") or 0)) > 1e-9:
                 model_rows.append({"model_code": mcode, "model_id": models[mcode]["id"], "weight_gram": berat})
+    from core.gap_workbook import parse_extra_sheets
+    extra = await parse_extra_sheets(db, wb, errors)
     return {"ok": not errors, "errors": errors, "materials": mats, "accounts": accs, "stores": stores, "bom_lines": bom_rows, "models": model_rows,
+            **extra,
             "totals": {"materials": len(mats), "accounts": len(accs), "stores": len(stores), "bom_lines": len(bom_rows),
-                       "bom_models": len({b["model_id"] for b in bom_rows}), "models": len(model_rows)}}
+                       "bom_models": len({b["model_id"] for b in bom_rows}), "models": len(model_rows),
+                       "sku_prices": len(extra["sku_prices"]), "stock_rows": len(extra["stock_fg"]) + len(extra["stock_mat"]),
+                       "salaries": len(extra["salaries"])}}
 
 
 async def apply_fill(db, parsed: dict, user: dict | None) -> dict:
@@ -341,11 +346,13 @@ async def apply_fill(db, parsed: dict, user: dict | None) -> dict:
     bom_res = await apply_bom_lines(db, parsed.get("bom_lines") or [], user)
     for m in parsed.get("models") or []:
         await db.rahaza_models.update_one({"id": m["model_id"]}, {"$set": {"weight_gram": m["weight_gram"], "updated_at": _now()}})
+    from core.gap_workbook import apply_extra
+    extra = await apply_extra(db, parsed, user)
     rep: dict = {}
     await _sync_units(db, rep)
     hpp = await recalc_standard_costs(db, user)
     return {"materials_updated": n_mat, "accounts_updated": len(parsed["accounts"]), "stores_updated": len(parsed["stores"]),
-            "models_weight_updated": len(parsed.get("models") or []), **bom_res, "units_added": rep.get("units_added"), **hpp}
+            "models_weight_updated": len(parsed.get("models") or []), **bom_res, **extra, "units_added": rep.get("units_added"), **hpp}
 
 
 async def apply_bom_lines(db, rows: list, user: dict | None) -> dict:
